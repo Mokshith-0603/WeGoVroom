@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // User profiles
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == userId;
+    }
+
+    // Trips collection
+    match /trips/{tripId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && 
+                       request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if request.auth != null && 
+                               resource.data.ownerId == request.auth.uid;
+    }
+
+    // Trip participants
+    match /tripParticipants/{participant} {
+      allow read, list: if request.auth != null;
+      allow create, write, delete: if request.auth != null;
+    }
+
+    // Trip requests/join requests
+    match /tripRequests/{request} {
+      allow read, list: if request.auth != null;
+      allow create, write, delete: if request.auth != null;
+    }
+
+    // Trip chat messages
+    match /tripMessages/{message} {
+      allow read, list: if request.auth != null;
+      allow create: if request.auth != null && 
+                       request.resource.data.senderId == request.auth.uid;
+      allow delete: if request.auth.uid == resource.data.senderId;
+    }
+
+    // Notifications
+    match /notifications/{docId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

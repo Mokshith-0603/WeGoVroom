@@ -1,0 +1,236 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+class MyTripsScreen extends StatelessWidget {
+  const MyTripsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final secondary = scheme.secondary;
+    final bg = theme.scaffoldBackgroundColor;
+
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        backgroundColor: bg,
+        appBar: AppBar(
+          backgroundColor: bg,
+          elevation: 0,
+          title: Text("My Trips",
+              style: theme.textTheme.headlineMedium
+                  ?.copyWith(color: Colors.black)),
+          iconTheme: const IconThemeData(color: Colors.black),
+          bottom: TabBar(
+            labelColor: secondary,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: secondary,
+            tabs: const [
+              Tab(text: "Hosting"),
+              Tab(text: "Joined"),
+              Tab(text: "Pending"),
+              Tab(text: "History"),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _hosting(uid, context),
+            _joined(uid, context),
+            _pending(uid, context),
+            _history(uid, context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// ⭐ ACTIVE FILTER
+  bool isActive(Map<String, dynamic> data) {
+    final dt = data["dateTime"]?.toDate();
+    if (dt == null) return false;
+    return DateTime.now().isBefore(dt);
+  }
+
+  bool isPast(Map<String, dynamic> data) {
+    final dt = data["dateTime"]?.toDate();
+    if (dt == null) return false;
+    return DateTime.now().isAfter(dt);
+  }
+
+  Widget _card(BuildContext context, Map<String, dynamic> data) {
+    final theme = Theme.of(context);
+    final secondary = theme.colorScheme.secondary;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black12)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.directions_bus, color: secondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text("${data["from"]} → ${data["to"]}",
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text("Host: ${data["ownerName"] ?? ""}",
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: Colors.grey[700])),
+        ],
+      ),
+    );
+  }
+
+  /// ⭐ HOSTING ACTIVE
+  Widget _hosting(String uid, BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection("trips")
+          .where("ownerId", isEqualTo: uid)
+          .snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+
+        final active = snap.data!.docs
+            .where((e) => e.exists && e.data() != null)
+            .map((e) => e.data() as Map<String, dynamic>)
+            .where(isActive)
+            .toList();
+
+        if (active.isEmpty) {
+          return const Center(child: Text("No active hosted trips"));
+        }
+
+        return ListView(children: active.map((d) => _card(context, d)).toList());
+      },
+    );
+  }
+
+  /// ⭐ JOINED ACTIVE
+  Widget _joined(String uid, BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection("tripParticipants")
+          .where("userId", isEqualTo: uid)
+          .snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+
+        final parts = snap.data!.docs;
+
+        if (parts.isEmpty) {
+          return const Center(child: Text("No joined trips"));
+        }
+
+        return FutureBuilder<List<DocumentSnapshot>>(
+          future: _fetchTrips(parts),
+          builder: (_, tripSnap) {
+            if (!tripSnap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final trips = tripSnap.data!
+                .where((e) => e.exists && e.data() != null)
+                .map((e) => e.data() as Map<String, dynamic>)
+                .where(isActive)
+                .toList();
+
+            if (trips.isEmpty) {
+              return const Center(child: Text("No active joined trips"));
+            }
+
+            return ListView(children: trips.map((d) => _card(context, d)).toList());
+          },
+        );
+      },
+    );
+  }
+
+  /// ⭐ PENDING REQUESTS
+  Widget _pending(String uid, BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection("tripRequests")
+          .where("userId", isEqualTo: uid)
+          .where("status", isEqualTo: "pending")
+          .snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+
+        final reqs = snap.data!.docs;
+
+        if (reqs.isEmpty) {
+          return const Center(child: Text("No pending requests"));
+        }
+
+        return FutureBuilder<List<DocumentSnapshot>>(
+          future: _fetchTrips(reqs),
+          builder: (_, tripSnap) {
+            if (!tripSnap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final docs = tripSnap.data!;
+            final trips = docs
+                .where((s) => s.exists && s.data() != null)
+                .map((e) => e.data() as Map<String, dynamic>)
+                .toList();
+
+            return ListView(children: trips.map((d) => _card(context, d)).toList());
+          },
+        );
+      },
+    );
+  }
+
+  /// ⭐ HISTORY
+  Widget _history(String uid, BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection("trips").snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+
+        final past = snap.data!.docs
+            .where((e) => e.exists && e.data() != null)
+            .map((e) => e.data() as Map<String, dynamic>)
+            .where(isPast)
+            .toList();
+
+        if (past.isEmpty) {
+          return const Center(child: Text("No trip history"));
+        }
+
+        return ListView(children: past.map((d) => _card(context, d)).toList());
+      },
+    );
+  }
+
+  /// ⭐ HELPER
+  Future<List<DocumentSnapshot>> _fetchTrips(
+      List<QueryDocumentSnapshot> source) async {
+    final db = FirebaseFirestore.instance;
+
+    final futures = source.map((d) {
+      final tripId = d["tripId"];
+      return db.collection("trips").doc(tripId).get();
+    });
+
+    return Future.wait(futures);
+  }
+}

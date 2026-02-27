@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "202225012572",
+    "project_id": "wegovroom-e77c2",
+    "storage_bucket": "wegovroom-e77c2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:202225012572:android:c32ef9602f70cb97523b99",
+        "android_client_info": {
+          "package_name": "com.example.wegovroom"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDOC60h1RBALyHX1Wwl_xm_nnxTPCvpaw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
