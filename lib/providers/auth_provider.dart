@@ -10,44 +10,76 @@ class AuthProvider extends ChangeNotifier {
 
   /// Allow college domains
   bool _isCollegeEmail(String email) {
-    return email.endsWith("@vitapstudent.ac.in") ||
-        email.endsWith("@vit.ac.in") ||
-        email.endsWith("@vitstudent.ac.in");
+    final e = email.trim().toLowerCase();
+    return e.endsWith("@vitapstudent.ac.in") ||
+        e.endsWith("@vit.ac.in") ||
+        e.endsWith("@vitstudent.ac.in");
   }
 
   Future<String?> signIn(String email, String password) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    final normalizedPassword = password.trim();
+
     try {
-      if (!_isCollegeEmail(email)) {
+      if (!_isCollegeEmail(normalizedEmail)) {
         return "Use college email only";
       }
 
       await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
+        email: normalizedEmail,
+        password: normalizedPassword,
       );
 
       notifyListeners();
       return null;
-    } catch (e) {
-      return e.toString();
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case "invalid-email":
+          return "Invalid email format";
+        case "user-not-found":
+          return "No account found for this email";
+        case "wrong-password":
+        case "invalid-credential":
+          return "Incorrect email or password";
+        case "too-many-requests":
+          return "Too many attempts. Try again later";
+        default:
+          return e.message ?? "Login failed";
+      }
+    } catch (_) {
+      return "Login failed";
     }
   }
 
   Future<String?> signUp(String email, String password) async {
+    final normalizedEmail = email.trim().toLowerCase();
+    final normalizedPassword = password.trim();
+
     try {
-      if (!_isCollegeEmail(email)) {
+      if (!_isCollegeEmail(normalizedEmail)) {
         return "Use college email only";
       }
 
       await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
+        email: normalizedEmail,
+        password: normalizedPassword,
       );
 
       notifyListeners();
       return null;
-    } catch (e) {
-      return e.toString();
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case "invalid-email":
+          return "Invalid email format";
+        case "email-already-in-use":
+          return "This email is already registered";
+        case "weak-password":
+          return "Password should be at least 6 characters";
+        default:
+          return e.message ?? "Signup failed";
+      }
+    } catch (_) {
+      return "Signup failed";
     }
   }
 

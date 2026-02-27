@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/auth_provider.dart';
+import '../widgets/avatar_utils.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -19,6 +20,29 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   String gender = "Male";
   int avatarIndex = 0;
   bool loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingProfile();
+  }
+
+  Future<void> _loadExistingProfile() async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+
+    final doc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
+    final data = doc.data();
+    if (data == null || !mounted) return;
+
+    setState(() {
+      nameController.text = (data["displayName"] ?? "").toString();
+      regController.text = (data["register"] ?? "").toString();
+      phoneController.text = (data["phone"] ?? "").toString();
+      gender = (data["gender"] ?? "Male").toString();
+      avatarIndex = normalizeAvatarIndex(data["avatar"]);
+    });
+  }
 
   Future<void> completeProfile() async {
     final auth = context.read<AuthProvider>();
@@ -56,6 +80,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canGoBack = Navigator.of(context).canPop();
+
     return Scaffold(
       body: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -71,6 +97,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 20),
+                if (canGoBack)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back),
+                    ),
+                  ),
 
                 const Text(
                   "Complete Your Profile",
@@ -104,18 +138,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
                       return GestureDetector(
                         onTap: () => setState(() => avatarIndex = i),
-                        child: CircleAvatar(
-                          radius: 26,
-                          backgroundColor: selected
-                              ? const Color(0xffff7a00)
-                              : Colors.grey.shade200,
-                          child: Text(
-                            "${i + 1}",
-                            style: TextStyle(
-                              color: selected ? Colors.white : Colors.black,
-                            ),
-                          ),
-                        ),
+                        child: buildAvatar(i, radius: 26, selected: selected),
                       );
                     },
                   ),

@@ -19,10 +19,18 @@ class _MainNavigationState extends State<MainNavigation> {
 
   final user = FirebaseAuth.instance.currentUser;
   final db = FirebaseFirestore.instance;
+  late final Stream<String?> _activeTripStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeTripStream = activeTripStream();
+  }
 
   /// ⭐ STREAM → ACTIVE TRIP ID (simplified and more reliable)
   Stream<String?> activeTripStream() {
     if (user == null) return Stream.value(null);
+    String? lastKnownTripId;
 
     return db
         .collection("tripParticipants")
@@ -31,6 +39,7 @@ class _MainNavigationState extends State<MainNavigation> {
         .asyncMap((snap) async {
       try {
         final now = DateTime.now();
+        String? fallbackJoinedTripId;
 
         // Check joined trips first
         for (final doc in snap.docs) {
@@ -40,12 +49,14 @@ class _MainNavigationState extends State<MainNavigation> {
 
             final tripDoc = await db.collection("trips").doc(tid).get();
             if (!tripDoc.exists) continue;
+            fallbackJoinedTripId ??= tid;
 
             final ts = tripDoc.data()?["dateTime"];
             if (ts == null) continue;
 
             DateTime dt = ts.toDate();
             if (dt.isAfter(now)) {
+              lastKnownTripId = tid;
               return tid; // First active trip found
             }
           } catch (e) {
@@ -53,42 +64,60 @@ class _MainNavigationState extends State<MainNavigation> {
           }
         }
 
+        if (fallbackJoinedTripId != null) {
+          lastKnownTripId = fallbackJoinedTripId;
+          return fallbackJoinedTripId;
+        }
+
         // Check owned trips if no joined trip
         try {
           final ownedSnap = await db
               .collection("trips")
               .where("ownerId", isEqualTo: user!.uid)
-              .orderBy("dateTime", descending: true)
-              .limit(1)
               .get();
 
           if (ownedSnap.docs.isNotEmpty) {
-            final data = ownedSnap.docs.first.data();
-            final ts = data["dateTime"];
-            if (ts != null) {
-              DateTime dt = ts.toDate();
-              if (dt.isAfter(now)) {
-                return ownedSnap.docs.first.id;
+            QueryDocumentSnapshot<Map<String, dynamic>>? bestDoc;
+            DateTime? bestDate;
+
+            for (final doc in ownedSnap.docs) {
+              final ts = doc.data()["dateTime"];
+              if (ts == null) continue;
+              try {
+                final dt = ts.toDate();
+                if (bestDate == null || dt.isAfter(bestDate)) {
+                  bestDate = dt;
+                  bestDoc = doc;
+                }
+              } catch (_) {
+                continue;
               }
             }
+
+            if (bestDoc != null) {
+              lastKnownTripId = bestDoc.id;
+              return bestDoc.id;
+            }
+
+            // Final fallback: if trips exist but dateTime is missing/invalid.
+            lastKnownTripId = ownedSnap.docs.first.id;
+            return ownedSnap.docs.first.id;
           }
         } catch (e) {
           // Fallback if query fails
         }
 
-        return null;
+        return lastKnownTripId;
       } catch (e) {
-        return null;
+        return lastKnownTripId;
       }
-    }).handleError((error) {
-      return null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<String?>(
-      stream: activeTripStream(),
+      stream: _activeTripStream,
       builder: (context, snap) {
         final tripId = snap.data;
 
