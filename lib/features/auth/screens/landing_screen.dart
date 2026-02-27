@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../navigation/app_router.dart';
 import 'signup_screen.dart';
 
 class LandingScreen extends StatefulWidget {
@@ -46,7 +47,14 @@ class _LandingScreenState extends State<LandingScreen> {
     if (error != null) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error)));
+      return;
     }
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const AppRouter()),
+      (_) => false,
+    );
   }
 
   void goSignup() {

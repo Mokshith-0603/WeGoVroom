@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../providers/auth_provider.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../screens/profile_setup_screen.dart';
+import 'avatar_utils.dart';
 
 class ProfileDrawer extends StatelessWidget {
   const ProfileDrawer({super.key});
@@ -33,6 +34,7 @@ class ProfileDrawer extends StatelessWidget {
 
             final email = user?.email ?? "";
             final reg = data["register"] ?? "";
+            final avatarIndex = normalizeAvatarIndex(data["avatar"]);
 
             return SingleChildScrollView(
               child: Column(
@@ -48,12 +50,7 @@ class ProfileDrawer extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const CircleAvatar(
-                          radius: 32,
-                          backgroundColor: Colors.white,
-                          child: Icon(Icons.person,
-                              color: Color(0xffff7a00), size: 30),
-                        ),
+                        buildAvatar(avatarIndex, radius: 32),
                         const SizedBox(height: 12),
 
                         Text(

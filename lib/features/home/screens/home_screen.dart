@@ -6,6 +6,7 @@ import '../../../widgets/trip_card.dart';
 import '../../trips/screens/create_trip_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../../profile/widgets/profile_drawer.dart';
+import '../../profile/widgets/avatar_utils.dart';
 import '../../../providers/auth_provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -92,6 +93,14 @@ class _HomeScreenState extends State<HomeScreen> {
       return data?['displayName'] ?? user.email?.split('@').first ?? '';
     }
 
+    Future<int> getAvatarIndex() async {
+      if (user == null) return 0;
+      final doc = await db.collection('users').doc(user.uid).get();
+      if (!doc.exists) return 0;
+      final data = doc.data();
+      return normalizeAvatarIndex(data?['avatar']);
+    }
+
     return Scaffold(
       backgroundColor: bg,
 
@@ -132,9 +141,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     builder: (context) {
                       return GestureDetector(
                         onTap: () => Scaffold.of(context).openDrawer(),
-                        child: const CircleAvatar(
-                          radius: 22,
-                          child: Icon(Icons.person),
+                        child: FutureBuilder<int>(
+                          future: getAvatarIndex(),
+                          builder: (_, snap) {
+                            return buildAvatar(snap.data ?? 0, radius: 22);
+                          },
                         ),
                       );
                     },

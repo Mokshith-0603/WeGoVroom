@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
 
@@ -44,7 +44,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     }
   }
 
-  /// ⭐ JOIN FINAL SAFE
   Future<bool> _hasActiveOtherTrip(String uid) async {
     final parts = await db
         .collection("tripParticipants")
@@ -54,7 +53,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final now = DateTime.now();
     for (final p in parts.docs) {
       final tripId = p["tripId"];
-      if (tripId == widget.tripId) continue; // ignore current trip
+      if (tripId == widget.tripId) continue;
       final tripDoc = await db.collection("trips").doc(tripId).get();
       if (!tripDoc.exists) continue;
       final data = tripDoc.data()!;
@@ -78,10 +77,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     setState(() => loading = true);
 
     try {
-      // prevent joining other active trip
       if (await _hasActiveOtherTrip(user.uid)) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("You already have an active trip")));
+          const SnackBar(content: Text("You already have an active trip")),
+        );
         setState(() => loading = false);
         return;
       }
@@ -101,7 +101,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         final max = data["maxPeople"] ?? 4;
 
         if (joined >= max) throw Exception("Trip full");
-
         tx.update(ref, {"joined": joined + 1});
       });
 
@@ -114,11 +113,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         "createdAt": FieldValue.serverTimestamp(),
       });
 
-      // notify host that someone joined
-      await db.collection('notifications').add({
-        'userId': trip['ownerId'],
-        'message': '$name joined your trip',
-        'createdAt': FieldValue.serverTimestamp(),
+      await db.collection("notifications").add({
+        "userId": trip["ownerId"],
+        "message": "$name joined your trip",
+        "createdAt": FieldValue.serverTimestamp(),
       });
 
       setState(() => joinedAlready = true);
@@ -134,8 +132,91 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     if (mounted) Navigator.pop(context);
   }
 
-  /// ⭐ PARTICIPANTS FINAL
-  Widget participants(String ownerId) {
+  String _reviewDocId(String reviewerId, String revieweeId) {
+    return "${widget.tripId}_${reviewerId}_$revieweeId";
+  }
+
+  Future<void> _openReviewDialog({
+    required String reviewerId,
+    required String reviewerName,
+    required String revieweeId,
+    required String revieweeName,
+  }) async {
+    final docId = _reviewDocId(reviewerId, revieweeId);
+    final existing = await db.collection("tripReviews").doc(docId).get();
+    final existingData = existing.data();
+
+    double rating = ((existingData?["rating"] ?? 5) as num).toDouble();
+    final commentController = TextEditingController(
+      text: (existingData?["comment"] ?? "") as String,
+    );
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (_) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text("Review $revieweeName"),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Rating: ${rating.toStringAsFixed(0)}/5"),
+                  Slider(
+                    value: rating,
+                    min: 1,
+                    max: 5,
+                    divisions: 4,
+                    label: rating.toStringAsFixed(0),
+                    onChanged: (v) => setDialogState(() => rating = v),
+                  ),
+                  TextField(
+                    controller: commentController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: "Write your feedback...",
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await db.collection("tripReviews").doc(docId).set({
+                      "tripId": widget.tripId,
+                      "reviewerId": reviewerId,
+                      "reviewerName": reviewerName,
+                      "revieweeId": revieweeId,
+                      "revieweeName": revieweeName,
+                      "rating": rating.toInt(),
+                      "comment": commentController.text.trim(),
+                      "createdAt": FieldValue.serverTimestamp(),
+                    }, SetOptions(merge: true));
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                  child: const Text("Submit"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _participantsSection({
+    required String ownerId,
+    required bool allowReview,
+    required String? currentUserId,
+    required String ownerName,
+  }) {
     return StreamBuilder<QuerySnapshot>(
       stream: db
           .collection("tripParticipants")
@@ -146,25 +227,52 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           return const SizedBox();
         }
 
-        final docs = snap.data!.docs;
-
+        final docs = [...snap.data!.docs];
         docs.sort((a, b) {
           if (a["userId"] == ownerId) return -1;
           if (b["userId"] == ownerId) return 1;
           return 0;
         });
 
+        String reviewerName = "User";
+        if (currentUserId != null) {
+          if (currentUserId == ownerId) {
+            reviewerName = ownerName;
+          }
+          for (final doc in docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            if (data["userId"] == currentUserId) {
+              reviewerName = data["name"] ?? "User";
+              break;
+            }
+          }
+        }
+
+        final canCurrentUserReview = currentUserId != null &&
+            (currentUserId == ownerId ||
+                docs.any((d) {
+                  final data = d.data() as Map<String, dynamic>;
+                  return data["userId"] == currentUserId;
+                }));
+
         return _card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Participants",
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text(
+                "Participants",
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 12),
               ...docs.map((p) {
                 final data = p.data() as Map<String, dynamic>;
                 final name = data["name"] ?? "User";
-                final isHost = data["userId"] == ownerId;
+                final participantId = data["userId"] as String?;
+                final isHost = participantId == ownerId;
+                final showReviewButton = allowReview &&
+                    canCurrentUserReview &&
+                    participantId != null &&
+                    participantId != currentUserId;
 
                 return ListTile(
                   leading: const CircleAvatar(
@@ -173,8 +281,78 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   ),
                   title: Text(name),
                   subtitle: isHost ? const Text("Host") : null,
+                  trailing: showReviewButton
+                      ? TextButton(
+                          onPressed: () => _openReviewDialog(
+                            reviewerId: currentUserId,
+                            reviewerName: reviewerName,
+                            revieweeId: participantId,
+                            revieweeName: name,
+                          ),
+                          child: const Text("Review"),
+                        )
+                      : null,
                 );
               })
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _reviewsSection() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: db
+          .collection("tripReviews")
+          .where("tripId", isEqualTo: widget.tripId)
+          .snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData || snap.data!.docs.isEmpty) {
+          return _card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text("Reviews", style: TextStyle(fontWeight: FontWeight.bold)),
+                SizedBox(height: 8),
+                Text("No reviews yet"),
+              ],
+            ),
+          );
+        }
+
+        final docs = [...snap.data!.docs];
+        docs.sort((a, b) {
+          final da = ((a.data() as Map<String, dynamic>)["createdAt"] as Timestamp?)
+              ?.toDate();
+          final dbb = ((b.data() as Map<String, dynamic>)["createdAt"] as Timestamp?)
+              ?.toDate();
+          if (da == null && dbb == null) return 0;
+          if (da == null) return 1;
+          if (dbb == null) return -1;
+          return dbb.compareTo(da);
+        });
+
+        return _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Reviews", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 12),
+              ...docs.map((doc) {
+                final r = doc.data() as Map<String, dynamic>;
+                final reviewer = r["reviewerName"] ?? "User";
+                final reviewee = r["revieweeName"] ?? "User";
+                final rating = r["rating"] ?? 0;
+                final comment = (r["comment"] ?? "").toString();
+
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text("$reviewer -> $reviewee"),
+                  subtitle: comment.isEmpty ? null : Text(comment),
+                  trailing: Text("$rating/5"),
+                );
+              }),
             ],
           ),
         );
@@ -191,11 +369,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       builder: (context, snap) {
         if (!snap.hasData || snap.data!.data() == null) {
           return const Scaffold(
-              body: Center(child: CircularProgressIndicator()));
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
 
         final d = snap.data!.data() as Map<String, dynamic>;
-
         final isCreator = user != null && user.uid == d["ownerId"];
 
         final joined = d["joined"] ?? 1;
@@ -207,13 +385,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           dt = d["dateTime"]?.toDate();
         } catch (_) {}
 
-        final expired =
-            dt != null ? DateTime.now().isAfter(dt) : false;
-
-        final dateText =
-            dt != null ? "${dt.day}/${dt.month}/${dt.year}" : "";
-        final timeText =
-            dt != null ? TimeOfDay.fromDateTime(dt).format(context) : "";
+        final expired = dt != null ? DateTime.now().isAfter(dt) : false;
+        final completed = d["completed"] == true;
+        final allowReview = completed;
+        final dateText = dt != null ? "${dt.day}/${dt.month}/${dt.year}" : "";
+        final timeText = dt != null ? TimeOfDay.fromDateTime(dt).format(context) : "";
 
         final theme = Theme.of(context);
         final scheme = theme.colorScheme;
@@ -224,7 +400,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           backgroundColor: bg,
           body: Column(
             children: [
-              /// ⭐ HEADER FINAL
               Container(
                 padding: const EdgeInsets.fromLTRB(12, 48, 12, 12),
                 color: bg,
@@ -239,16 +414,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       children: [
                         Text(
                           "WeGoVroom",
-                          style: theme.textTheme.headlineMedium!
-                              .copyWith(color: secondary),
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            color: secondary,
+                          ),
                         ),
                         const Spacer(),
                         if (isCreator)
                           IconButton(
-                            icon:
-                                const Icon(Icons.delete, color: Colors.red),
+                            icon: const Icon(Icons.delete, color: Colors.red),
                             onPressed: deleteTrip,
-                          )
+                          ),
                       ],
                     ),
                   ],
@@ -258,17 +433,21 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 child: ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    Text("${d["from"]} → ${d["to"]}",
-                        style: theme.textTheme.headlineMedium
-                            ?.copyWith(fontSize: 20)),
+                    Text(
+                      "${d["from"]} -> ${d["to"]}",
+                      style: theme.textTheme.headlineMedium?.copyWith(fontSize: 20),
+                    ),
                     const SizedBox(height: 16),
                     _card(
                       child: Column(
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.calendar_today,
-                                  size: 16, color: theme.iconTheme.color),
+                              Icon(
+                                Icons.calendar_today,
+                                size: 16,
+                                color: theme.iconTheme.color,
+                              ),
                               const SizedBox(width: 6),
                               Text(dateText),
                               const Spacer(),
@@ -278,31 +457,35 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              Icon(Icons.currency_rupee,
-                                  color: Colors.green[700]),
+                              Icon(Icons.currency_rupee, color: Colors.green[700]),
                               Text("${d["cost"]}/person"),
                               const Spacer(),
-                              Text("$joined/$max joined",
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w500)),
+                              Text(
+                                "$joined/$max joined",
+                                style: const TextStyle(fontWeight: FontWeight.w500),
+                              ),
                             ],
                           ),
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              Icon(Icons.location_on,
-                                  color: Colors.red[700]),
+                              Icon(Icons.location_on, color: Colors.red[700]),
                               const SizedBox(width: 6),
-                              Expanded(
-                                  child:
-                                      Text(d["meetingPoint"] ?? "")),
+                              Expanded(child: Text(d["meetingPoint"] ?? "")),
                             ],
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 16),
-                    participants(d["ownerId"]),
+                    _participantsSection(
+                      ownerId: d["ownerId"],
+                      allowReview: allowReview,
+                      currentUserId: user?.uid,
+                      ownerName: d["ownerName"] ?? "Host",
+                    ),
+                    const SizedBox(height: 16),
+                    _reviewsSection(),
                     const SizedBox(height: 120),
                   ],
                 ),
@@ -319,19 +502,21 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: secondary,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30)),
+                        borderRadius: BorderRadius.circular(30),
+                      ),
                     ),
                     onPressed: () async {
-                      // mark trip as completed (set dateTime to now)
-                      await db.collection('trips').doc(widget.tripId).update({
-                        'dateTime': FieldValue.serverTimestamp(),
-                        'completed': true,
+                      await db.collection("trips").doc(widget.tripId).update({
+                        "dateTime": FieldValue.serverTimestamp(),
+                        "completed": true,
                       });
                     },
                     child: const Text(
                       "Complete Trip",
                       style: TextStyle(
-                          color: Colors.black, fontWeight: FontWeight.bold),
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -347,20 +532,20 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: secondary,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30)),
+                        borderRadius: BorderRadius.circular(30),
+                      ),
                     ),
-                    onPressed:
-                        (loading || seatsLeft <= 0 || joinedAlready)
-                            ? null
-                            : () => handleJoin(d),
+                    onPressed: (loading || seatsLeft <= 0 || joinedAlready)
+                        ? null
+                        : () => handleJoin(d),
                     child: loading
-                        ? const CircularProgressIndicator(
-                            color: Colors.white)
+                        ? const CircularProgressIndicator(color: Colors.white)
                         : Text(
                             joinedAlready ? "Joined" : "Join Trip",
                             style: const TextStyle(
-                                color: Colors.black,
-                                fontWeight: FontWeight.bold),
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                   ),
                 ),
@@ -380,9 +565,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(blurRadius: 12, color: Colors.black12)
-        ],
+        boxShadow: const [BoxShadow(blurRadius: 12, color: Colors.black12)],
       ),
       child: child,
     );
