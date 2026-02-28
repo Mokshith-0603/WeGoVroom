@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/responsive.dart';
 import 'landing_screen.dart';
 
 class AppHomeScreen extends StatelessWidget {
@@ -14,6 +15,7 @@ class AppHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final r = context.rs;
 
     return Scaffold(
       body: Stack(
@@ -28,14 +30,14 @@ class AppHomeScreen extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: -90,
-            right: -70,
-            child: _blob(const Color(0x33ff7a00), 240),
+            top: -r(90),
+            right: -r(70),
+            child: _blob(const Color(0x33ff7a00), r(240)),
           ),
           Positioned(
-            top: 120,
-            left: -80,
-            child: _blob(const Color(0x334169e1), 220),
+            top: r(120),
+            left: -r(80),
+            child: _blob(const Color(0x334169e1), r(220)),
           ),
           SafeArea(
             child: TweenAnimationBuilder<double>(
@@ -51,22 +53,23 @@ class AppHomeScreen extends StatelessWidget {
                 );
               },
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                child: ResponsiveContent(
+                  padding: EdgeInsets.fromLTRB(r(20), r(18), r(20), r(18)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     Container(
-                      padding: const EdgeInsets.all(18),
+                      padding: EdgeInsets.all(r(18)),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(r(24)),
                         gradient: const LinearGradient(
-                          colors: [Color(0xff1d3557), Color(0xff457b9d)],
+                          colors: [Color(0xcc000000), Color(0x88000000)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                         boxShadow: const [
                           BoxShadow(
-                            color: Color(0x2a1d3557),
+                            color: Color(0x33000000),
                             blurRadius: 24,
                             offset: Offset(0, 10),
                           )
@@ -76,77 +79,91 @@ class AppHomeScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            children: const [
+                            children: [
                               CircleAvatar(
-                                radius: 20,
-                                backgroundColor: Color(0xffff7a00),
-                                child: Icon(Icons.directions_car, color: Colors.white),
+                                radius: r(20),
+                                backgroundColor: const Color(0xffff7a00),
+                                child: Icon(Icons.directions_car, color: Colors.white, size: r(20)),
                               ),
-                              SizedBox(width: 10),
-                              Text(
-                                "WeGoVroom",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w800,
+                              SizedBox(width: r(10)),
+                              RichText(
+                                text: TextSpan(
+                                  style: TextStyle(
+                                    fontSize: r(22),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                  children: const [
+                                    TextSpan(
+                                      text: "WeGo",
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                    TextSpan(
+                                      text: "Vroom",
+                                      style: TextStyle(color: Color(0xffff7a00)),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 14),
-                          const Text(
+                          SizedBox(height: r(14)),
+                          Text(
                             "Shared Rides for Smarter Campus Travel",
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 24,
+                              fontSize: r(24),
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          const Text(
+                          SizedBox(height: r(8)),
+                          Text(
                             "Join trusted students, split costs, chat in-trip, and travel together with confidence.",
                             style: TextStyle(
                               color: Color(0xffdbe8f2),
-                              fontSize: 14,
+                              fontSize: r(14),
                               height: 1.4,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 18),
+                    SizedBox(height: r(18)),
                     Text(
                       "Why Use WeGoVroom?",
-                      style: theme.textTheme.headlineMedium?.copyWith(fontSize: 22),
+                      style: theme.textTheme.headlineMedium?.copyWith(fontSize: r(22)),
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: r(10)),
                     _featureCard(
+                      context: context,
                       icon: Icons.route_outlined,
                       title: "Easy Trip Discovery",
                       subtitle: "Find rides from your college community in seconds.",
                     ),
                     _featureCard(
+                      context: context,
                       icon: Icons.chat_bubble_outline,
                       title: "Trip-Based Chat",
                       subtitle: "Coordinate pickup, timing, and updates inside each trip.",
                     ),
                     _featureCard(
+                      context: context,
                       icon: Icons.verified_user_outlined,
                       title: "Trusted Network",
                       subtitle: "College-email sign-in keeps the community reliable.",
                     ),
                     _featureCard(
+                      context: context,
                       icon: Icons.reviews_outlined,
                       title: "Member Reviews",
                       subtitle: "Rate travel companions after completed trips.",
                     ),
-                    const SizedBox(height: 20),
+                    SizedBox(height: r(20)),
                     SizedBox(
                       width: double.infinity,
-                      height: 56,
+                      height: r(56),
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(r(30)),
                           gradient: const LinearGradient(
                             colors: [Color(0xffff7a00), Color(0xffff9a3c)],
                           ),
@@ -161,14 +178,14 @@ class AppHomeScreen extends StatelessWidget {
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            borderRadius: BorderRadius.circular(30),
+                            borderRadius: BorderRadius.circular(r(30)),
                             onTap: () => _goToLogin(context),
-                            child: const Center(
+                            child: Center(
                               child: Text(
                                 "Log In",
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 16,
+                                  fontSize: r(16),
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -177,7 +194,8 @@ class AppHomeScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -198,43 +216,45 @@ class AppHomeScreen extends StatelessWidget {
     );
   }
 
-  static Widget _featureCard({
+  Widget _featureCard({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required String subtitle,
   }) {
+    final r = context.rs;
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
+      margin: EdgeInsets.only(bottom: r(10)),
+      padding: EdgeInsets.all(r(14)),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.88),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(r(16)),
         border: Border.all(color: const Color(0xffeef2f8)),
       ),
       child: Row(
         children: [
           Container(
-            width: 38,
-            height: 38,
+            width: r(38),
+            height: r(38),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(r(10)),
               color: const Color(0xfffff0e0),
             ),
-            child: Icon(icon, color: const Color(0xffff7a00), size: 20),
+            child: Icon(icon, color: const Color(0xffff7a00), size: r(20)),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: r(12)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: r(14.5)),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: r(2)),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Color(0xff5f6772), fontSize: 12.5),
+                  style: TextStyle(color: const Color(0xff5f6772), fontSize: r(12.5)),
                 ),
               ],
             ),

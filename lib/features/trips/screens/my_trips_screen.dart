@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../../utils/responsive.dart';
 import 'trip_detail_screen.dart';
 
 class MyTripsScreen extends StatelessWidget {
@@ -28,6 +29,7 @@ class MyTripsScreen extends StatelessWidget {
           ),
           iconTheme: const IconThemeData(color: Colors.black),
           bottom: TabBar(
+            isScrollable: context.isTablet,
             labelColor: secondary,
             unselectedLabelColor: Colors.grey,
             indicatorColor: secondary,
@@ -70,16 +72,17 @@ class MyTripsScreen extends StatelessWidget {
   }) {
     final theme = Theme.of(context);
     final secondary = theme.colorScheme.secondary;
+    final r = context.rs;
 
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(r(18)),
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        padding: const EdgeInsets.all(16),
+        margin: EdgeInsets.symmetric(horizontal: r(16), vertical: r(8)),
+        padding: EdgeInsets.all(r(16)),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(r(18)),
           boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black12)],
         ),
         child: Column(
@@ -88,7 +91,7 @@ class MyTripsScreen extends StatelessWidget {
             Row(
               children: [
                 Icon(Icons.directions_bus, color: secondary),
-                const SizedBox(width: 8),
+                SizedBox(width: r(8)),
                 Expanded(
                   child: Text(
                     "${data["from"]} -> ${data["to"]}",
@@ -99,7 +102,7 @@ class MyTripsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: r(4)),
             Text(
               "Host: ${data["ownerName"] ?? ""}",
               style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),

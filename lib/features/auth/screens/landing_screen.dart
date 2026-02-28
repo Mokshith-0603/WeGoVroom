@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../navigation/app_router.dart';
+import '../../../utils/responsive.dart';
+import 'app_home_screen.dart';
 import 'signup_screen.dart';
 
 class LandingScreen extends StatefulWidget {
@@ -16,6 +18,7 @@ class _LandingScreenState extends State<LandingScreen> {
   final passController = TextEditingController();
 
   bool loading = false;
+  bool _showPassword = false;
 
   @override
   void dispose() {
@@ -66,9 +69,10 @@ class _LandingScreenState extends State<LandingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final r = context.rs;
     return Scaffold(
       body: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: EdgeInsets.symmetric(horizontal: r(24)),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [Color(0xfff5f7ff), Colors.white],
@@ -77,45 +81,50 @@ class _LandingScreenState extends State<LandingScreen> {
           ),
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            child: SizedBox(
-              height: MediaQuery.of(context).size.height - 80,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
+          child: Stack(
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: ResponsiveContent(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
                   /// LOGO
-                  const CircleAvatar(
-                    radius: 42,
+                  CircleAvatar(
+                    radius: r(42),
                     backgroundColor: Colors.white,
-                    child: Icon(Icons.travel_explore, size: 32),
+                    child: Icon(Icons.travel_explore, size: r(32)),
                   ),
 
-                  const SizedBox(height: 24),
+                  SizedBox(height: r(24)),
 
                   /// TITLE
                   RichText(
                     textAlign: TextAlign.center,
-                    text: const TextSpan(
+                    text: TextSpan(
                       style:
-                          TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                          TextStyle(fontSize: r(26), fontWeight: FontWeight.bold),
                       children: [
-                        TextSpan(
+                        const TextSpan(
                             text: "Welcome to ",
                             style: TextStyle(color: Colors.black)),
-                        TextSpan(
+                        const TextSpan(
                             text: "WeGo",
                             style: TextStyle(color: Colors.black)),
-                        TextSpan(
+                        const TextSpan(
                             text: "Vroom",
                             style: TextStyle(color: Color(0xffff7a00))),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 8),
-                  const Text("Sign in to continue"),
+                  SizedBox(height: r(8)),
+                  Text("Sign in to continue", style: TextStyle(fontSize: r(14))),
 
-                  const SizedBox(height: 32),
+                  SizedBox(height: r(32)),
 
                   /// EMAIL
                   TextField(
@@ -124,35 +133,43 @@ class _LandingScreenState extends State<LandingScreen> {
                       hintText: "you@college.edu",
                       prefixIcon: const Icon(Icons.email),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(r(14)),
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 12),
+                  SizedBox(height: r(12)),
 
                   /// PASSWORD
                   TextField(
                     controller: passController,
-                    obscureText: true,
+                    obscureText: !_showPassword,
                     decoration: InputDecoration(
                       hintText: "Password",
                       prefixIcon: const Icon(Icons.lock),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _showPassword ? Icons.visibility_off : Icons.visibility,
+                        ),
+                        onPressed: () {
+                          setState(() => _showPassword = !_showPassword);
+                        },
+                      ),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(r(14)),
                       ),
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  SizedBox(height: r(24)),
 
                   /// LOGIN BUTTON
                   SizedBox(
                     width: double.infinity,
-                    height: 56,
+                    height: r(56),
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(30),
+                        borderRadius: BorderRadius.circular(r(30)),
                         gradient: const LinearGradient(
                           colors: [Color(0xffff7a00), Color(0xffff9a3c)],
                         ),
@@ -160,7 +177,7 @@ class _LandingScreenState extends State<LandingScreen> {
                       child: Material(
                         color: Colors.transparent,
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(30),
+                          borderRadius: BorderRadius.circular(r(30)),
                           onTap: loading ? null : login,
                           child: Center(
                             child: loading
@@ -179,7 +196,7 @@ class _LandingScreenState extends State<LandingScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 12),
+                  SizedBox(height: r(12)),
 
                   /// SIGNUP LINK
                   TextButton(
@@ -192,9 +209,26 @@ class _LandingScreenState extends State<LandingScreen> {
                       ),
                     ),
                   ),
-                ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
-            ),
+              Align(
+                alignment: Alignment.topLeft,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AppHomeScreen()),
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ),
       ),

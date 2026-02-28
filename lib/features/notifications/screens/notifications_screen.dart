@@ -20,7 +20,6 @@ class NotificationsScreen extends StatelessWidget {
     final stream = FirebaseFirestore.instance
         .collection('notifications')
         .where('userId', isEqualTo: user.uid)
-        .orderBy('createdAt', descending: true)
         .snapshots();
 
     return Scaffold(
@@ -36,11 +35,26 @@ class NotificationsScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
+          if (snap.hasError) {
+            return Center(
+              child: Text('Failed to load notifications: ${snap.error}'),
+            );
+          }
+
           if (!snap.hasData || snap.data!.docs.isEmpty) {
             return const Center(child: Text('No notifications yet'));
           }
 
-          final docs = snap.data!.docs;
+          final docs = [...snap.data!.docs]..sort((a, b) {
+              final da = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+              final db = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+              final ta = da?.toDate();
+              final tb = db?.toDate();
+              if (ta == null && tb == null) return 0;
+              if (ta == null) return 1;
+              if (tb == null) return -1;
+              return tb.compareTo(ta);
+            });
 
           return ListView.builder(
             itemCount: docs.length,

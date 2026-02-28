@@ -6,6 +6,7 @@ import '../features/home/screens/home_screen.dart';
 import '../features/trips/screens/my_trips_screen.dart';
 import '../features/drivers/screens/drivers_screen.dart';
 import '../features/chat/screens/chat_screen.dart';
+import '../utils/responsive.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -135,7 +136,7 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
 
           bottomNavigationBar: NavigationBar(
-            height: 70,
+            height: context.rs(70),
             selectedIndex: index,
             onDestinationSelected: (i) {
               setState(() => index = i);
