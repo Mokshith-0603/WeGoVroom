@@ -29,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ];
 
   String selectedChip = "All";
+  String _searchQuery = "";
 
   /// ⭐ CHECK ACTIVE TRIP (BLOCK CREATE)
   Future<bool> hasActiveTrip(String uid) async {
@@ -211,6 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: r(16)),
               child: TextField(
+                onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
                 decoration: InputDecoration(
                   hintText: "Search trips, destinations...",
                   prefixIcon: const Icon(Icons.search),
@@ -306,10 +308,24 @@ class _HomeScreenState extends State<HomeScreen> {
                   }
 
                   final filtered = docs.where((doc) {
-                    if (selectedChip == "All") return true;
                     final data = doc.data() as Map<String, dynamic>;
-                    return data["to"] == selectedChip;
+                    final to = (data["to"] ?? "").toString();
+                    final from = (data["from"] ?? "").toString();
+                    final ownerName = (data["ownerName"] ?? "").toString();
+
+                    final matchesChip = selectedChip == "All" || to == selectedChip;
+                    if (!matchesChip) return false;
+
+                    if (_searchQuery.isEmpty) return true;
+
+                    final haystack =
+                        "$from $to $ownerName".toLowerCase();
+                    return haystack.contains(_searchQuery);
                   }).toList();
+
+                  if (filtered.isEmpty) {
+                    return const Center(child: Text("No trips match your search"));
+                  }
 
                   return ListView.builder(
                     padding: EdgeInsets.all(r(16)),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../features/trips/screens/trip_detail_screen.dart';
 import '../utils/responsive.dart';
+import '../utils/transport_icons.dart';
 
 class TripCard extends StatelessWidget {
   final String tripId;
@@ -20,6 +21,7 @@ class TripCard extends StatelessWidget {
     final seatsLeft = (max - joined).clamp(0, max);
     final isPublic = data["isPublic"] ?? true;
     final ownerName = data["ownerName"] ?? "Trip Host";
+    final tripIcon = destinationTransportIcon(data["to"]?.toString());
 
     DateTime? dt;
     try {
@@ -59,7 +61,7 @@ class TripCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.directions_bus, color: secondary),
+                Icon(tripIcon, color: secondary),
                 SizedBox(width: r(8)),
                 Expanded(
                   child: Text(

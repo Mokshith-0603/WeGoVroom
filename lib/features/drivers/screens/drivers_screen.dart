@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../utils/transport_icons.dart';
 import '../../../utils/responsive.dart';
 
 class DriversScreen extends StatefulWidget {
@@ -117,6 +118,7 @@ class _DriversScreenState extends State<DriversScreen> {
     final phone = d["phone"] ?? "";
     final vehicle = d["vehicle"] ?? "";
     final rating = (d["rating"] ?? 4.5).toString();
+    final vehicleIcon = vehicleTransportIcon(vehicle.toString());
 
     final theme = Theme.of(context);
     final secondary = theme.colorScheme.secondary;
@@ -138,7 +140,7 @@ class _DriversScreenState extends State<DriversScreen> {
           CircleAvatar(
             radius: r(28),
             backgroundColor: secondary,
-            child: const Icon(Icons.directions_car, color: Colors.white),
+            child: Icon(vehicleIcon, color: Colors.white),
           ),
 
           SizedBox(width: r(14)),
