@@ -28,12 +28,14 @@ class ManageRequestsScreen extends StatelessWidget {
     // mark request approved
     await req.reference.update({"status": "approved"});
 
-    // notify participant
-    await db.collection('notifications').add({
-      'userId': data['userId'],
-      'message': 'Your request to join this trip was approved',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    // notify participant (non-blocking if caller has no notifications permission)
+    try {
+      await db.collection('notifications').add({
+        'userId': data['userId'],
+        'message': 'Your request to join this trip was approved',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
   }
 
   Future<void> reject(String requestId) async {
@@ -46,11 +48,13 @@ class ManageRequestsScreen extends StatelessWidget {
 
     await req.reference.update({"status": "rejected"});
 
-    await db.collection('notifications').add({
-      'userId': data['userId'],
-      'message': 'Your request to join this trip was rejected',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      await db.collection('notifications').add({
+        'userId': data['userId'],
+        'message': 'Your request to join this trip was rejected',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    } catch (_) {}
   }
 
   @override
@@ -64,13 +68,15 @@ class ManageRequestsScreen extends StatelessWidget {
             .where("status", isEqualTo: "pending")
             .snapshots(),
         builder: (context, snap) {
-          if (!snap.hasData)
+          if (!snap.hasData) {
             return const Center(child: CircularProgressIndicator());
+          }
 
           final docs = snap.data!.docs;
 
-          if (docs.isEmpty)
+          if (docs.isEmpty) {
             return const Center(child: Text("No requests"));
+          }
 
           return ListView.builder(
             itemCount: docs.length,

@@ -3,16 +3,50 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../providers/auth_provider.dart';
+import '../../notifications/screens/admin_notifications_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../screens/profile_setup_screen.dart';
 import 'avatar_utils.dart';
+import '../../../utils/responsive.dart';
 
 class ProfileDrawer extends StatelessWidget {
   const ProfileDrawer({super.key});
 
+  Future<int> _completedTripCount(String? uid) async {
+    if (uid == null) return 0;
+
+    final db = FirebaseFirestore.instance;
+    final completedTripIds = <String>{};
+
+    final ownedSnap = await db.collection("trips").where("ownerId", isEqualTo: uid).get();
+    for (final doc in ownedSnap.docs) {
+      final data = doc.data();
+      if (data["completed"] == true) {
+        completedTripIds.add(doc.id);
+      }
+    }
+
+    final participantSnap =
+        await db.collection("tripParticipants").where("userId", isEqualTo: uid).get();
+    for (final p in participantSnap.docs) {
+      final tripId = p.data()["tripId"] as String?;
+      if (tripId == null || tripId.isEmpty || completedTripIds.contains(tripId)) continue;
+
+      final tripDoc = await db.collection("trips").doc(tripId).get();
+      if (!tripDoc.exists) continue;
+      final tripData = tripDoc.data() ?? {};
+      if (tripData["completed"] == true) {
+        completedTripIds.add(tripId);
+      }
+    }
+
+    return completedTripIds.length;
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.read<AuthProvider>().user;
+    final r = context.rs;
 
     return Drawer(
       child: SafeArea(
@@ -35,34 +69,40 @@ class ProfileDrawer extends StatelessWidget {
             final email = user?.email ?? "";
             final reg = data["register"] ?? "";
             final avatarIndex = normalizeAvatarIndex(data["avatar"]);
+            final isAdmin = data["role"] == "admin" || data["isAdmin"] == true;
 
-            return SingleChildScrollView(
-              child: Column(
-                children: [
+            return FutureBuilder<int>(
+              future: _completedTripCount(user?.uid),
+              builder: (context, tripCountSnap) {
+                final completedTrips = tripCountSnap.data ?? 0;
+
+                return SingleChildScrollView(
+                  child: Column(
+                    children: [
                   /// ⭐ HEADER (ORANGE THEME)
                   Container(
                     width: double.infinity,
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                        EdgeInsets.symmetric(horizontal: r(20), vertical: r(24)),
                     decoration: const BoxDecoration(
                       color: Color(0xffff7a00),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        buildAvatar(avatarIndex, radius: 32),
-                        const SizedBox(height: 12),
+                        buildAvatar(avatarIndex, radius: r(32)),
+                        SizedBox(height: r(12)),
 
                         Text(
                           name.toString().toUpperCase(),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
-                            fontSize: 18,
+                            fontSize: r(18),
                           ),
                         ),
 
-                        const SizedBox(height: 4),
+                        SizedBox(height: r(4)),
 
                         Text(email,
                             style:
@@ -78,13 +118,16 @@ class ProfileDrawer extends StatelessWidget {
 
                   /// ⭐ STATS
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(r(16)),
                     child: Row(
-                      children: const [
+                      children: [
                         Expanded(
-                          child: _StatCard(title: "Trips", value: "0"),
+                          child: _StatCard(
+                            title: "Trips",
+                            value: completedTrips.toString(),
+                          ),
                         ),
-                        SizedBox(width: 12),
+                        SizedBox(width: r(12)),
                         Expanded(
                           child: _StatCard(title: "Trust Score", value: "5"),
                         ),
@@ -117,7 +160,20 @@ class ProfileDrawer extends StatelessWidget {
                     },
                   ),
 
-                  const SizedBox(height: 20),
+                  if (isAdmin)
+                    ListTile(
+                      leading: const Icon(Icons.campaign_outlined),
+                      title: const Text("Send Notifications"),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const AdminNotificationsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                  SizedBox(height: r(20)),
 
                   /// ⭐ LOGOUT (FIXED)
                   ListTile(
@@ -131,9 +187,11 @@ class ProfileDrawer extends StatelessWidget {
                     },
                   ),
 
-                  const SizedBox(height: 30),
-                ],
-              ),
+                  SizedBox(height: r(30)),
+                    ],
+                  ),
+                );
+              },
             );
           },
         ),
@@ -153,18 +211,18 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final r = context.rs;
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: EdgeInsets.symmetric(vertical: r(16)),
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(r(14)),
       ),
       child: Column(
         children: [
           Text(value,
-              style:
-                  const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
+              style: TextStyle(fontSize: r(18), fontWeight: FontWeight.bold)),
+          SizedBox(height: r(4)),
           Text(title, style: const TextStyle(color: Colors.grey)),
         ],
       ),

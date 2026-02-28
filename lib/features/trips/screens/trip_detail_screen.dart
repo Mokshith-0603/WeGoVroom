@@ -113,11 +113,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         "createdAt": FieldValue.serverTimestamp(),
       });
 
-      await db.collection("notifications").add({
-        "userId": trip["ownerId"],
-        "message": "$name joined your trip",
-        "createdAt": FieldValue.serverTimestamp(),
-      });
+      try {
+        await db.collection("notifications").add({
+          "userId": trip["ownerId"],
+          "message": "$name joined your trip",
+          "createdAt": FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
 
       setState(() => joinedAlready = true);
     } catch (e) {

@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../utils/responsive.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? tripId;
@@ -22,28 +23,78 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _canChat = false;
   String? _effectiveTripId;
 
-  Future<String?> _resolveFallbackTripId() async {
+  @override
+  void initState() {
+    super.initState();
+    _effectiveTripId = widget.tripId;
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.tripId != null && widget.tripId != oldWidget.tripId) {
+      _effectiveTripId = widget.tripId;
+    }
+  }
+
+  bool _isTripActive(Map<String, dynamic> tripData) {
+    return tripData['completed'] != true;
+  }
+
+  int _tripSortScore(Map<String, dynamic> tripData) {
+    final ts = tripData['dateTime'];
+    try {
+      if (ts == null) return 1 << 30;
+      final dt = (ts as Timestamp).toDate();
+      return dt.millisecondsSinceEpoch;
+    } catch (_) {
+      return 1 << 30;
+    }
+  }
+
+  Future<String?> _resolveFallbackTripId({String? excludeTripId}) async {
     if (uid == null) return null;
+
+    final candidates = <Map<String, dynamic>>[];
 
     final participantSnap = await db
         .collection('tripParticipants')
         .where('userId', isEqualTo: uid)
-        .limit(1)
         .get();
 
-    if (participantSnap.docs.isNotEmpty) {
-      final data = participantSnap.docs.first.data();
-      final tripId = data['tripId'] as String?;
-      if (tripId != null && tripId.isNotEmpty) return tripId;
+    for (final p in participantSnap.docs) {
+      final tripId = p.data()['tripId'] as String?;
+      if (tripId == null || tripId.isEmpty) continue;
+      if (excludeTripId != null && tripId == excludeTripId) continue;
+
+      final tripDoc = await db.collection('trips').doc(tripId).get();
+      if (!tripDoc.exists) continue;
+
+      final data = tripDoc.data();
+      if (data == null || !_isTripActive(data)) continue;
+
+      candidates.add({'id': tripId, 'data': data});
     }
 
-    final ownerSnap =
-        await db.collection('trips').where('ownerId', isEqualTo: uid).limit(1).get();
-    if (ownerSnap.docs.isNotEmpty) {
-      return ownerSnap.docs.first.id;
+    final ownerSnap = await db.collection('trips').where('ownerId', isEqualTo: uid).get();
+    for (final t in ownerSnap.docs) {
+      if (excludeTripId != null && t.id == excludeTripId) continue;
+      final data = t.data();
+      if (!_isTripActive(data)) continue;
+
+      if (candidates.any((c) => c['id'] == t.id)) continue;
+      candidates.add({'id': t.id, 'data': data});
     }
 
-    return null;
+    if (candidates.isEmpty) return null;
+
+    candidates.sort((a, b) {
+      final aa = _tripSortScore(a['data'] as Map<String, dynamic>);
+      final bb = _tripSortScore(b['data'] as Map<String, dynamic>);
+      return aa.compareTo(bb);
+    });
+
+    return candidates.first['id'] as String;
   }
 
   @override
@@ -54,22 +105,23 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _noTrip() {
     final theme = Theme.of(context);
+    final r = context.rs;
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.chat_bubble_outline, size: 60, color: theme.disabledColor),
-            const SizedBox(height: 12),
+            Icon(Icons.chat_bubble_outline, size: r(60), color: theme.disabledColor),
+            SizedBox(height: r(12)),
             Text(
               'No Active Trip Chat',
-              style: theme.textTheme.headlineMedium?.copyWith(fontSize: 18),
+              style: theme.textTheme.headlineMedium?.copyWith(fontSize: r(18)),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: r(6)),
             Text(
               'Join a trip to start chatting',
-              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey),
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey, fontSize: r(14)),
             ),
           ],
         ),
@@ -108,10 +160,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final scheme = theme.colorScheme;
     final secondary = scheme.secondary;
     final bg = theme.scaffoldBackgroundColor;
-
-    if (widget.tripId != null) {
-      _effectiveTripId = widget.tripId;
-    }
+    final r = context.rs;
 
     if (_effectiveTripId == null) {
       return FutureBuilder<String?>(
@@ -153,7 +202,44 @@ class _ChatScreenState extends State<ChatScreen> {
         }
 
         final tripData = tripSnap.data?.data() as Map<String, dynamic>?;
-        final isOwner = tripData != null && tripData['ownerId'] == uid;
+        final isActiveTrip = tripData != null && _isTripActive(tripData);
+
+        if (!isActiveTrip) {
+          return FutureBuilder<String?>(
+            future: _resolveFallbackTripId(excludeTripId: _effectiveTripId),
+            builder: (context, nextSnap) {
+              if (nextSnap.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final nextTripId = nextSnap.data;
+              if (nextTripId == null) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  if (_effectiveTripId != null) {
+                    setState(() => _effectiveTripId = null);
+                  }
+                });
+                return _noTrip();
+              }
+
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                if (_effectiveTripId != nextTripId) {
+                  setState(() => _effectiveTripId = nextTripId);
+                }
+              });
+
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            },
+          );
+        }
+
+        final isOwner = tripData['ownerId'] == uid;
 
         return StreamBuilder<QuerySnapshot>(
           stream: db
@@ -219,7 +305,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           });
 
                         return ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                          padding: EdgeInsets.symmetric(horizontal: r(8), vertical: r(12)),
                           itemCount: docs.length,
                           itemBuilder: (_, i) {
                             final data = docs[i].data() as Map<String, dynamic>;
@@ -232,18 +318,19 @@ class _ChatScreenState extends State<ChatScreen> {
                             return Align(
                               alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
                               child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                margin: EdgeInsets.symmetric(vertical: r(4)),
+                                padding: EdgeInsets.symmetric(horizontal: r(14), vertical: r(10)),
                                 constraints: BoxConstraints(
-                                  maxWidth: MediaQuery.of(context).size.width * 0.7,
+                                  maxWidth: MediaQuery.of(context).size.width *
+                                      (context.isTablet ? 0.5 : 0.72),
                                 ),
                                 decoration: BoxDecoration(
                                   color: mine ? secondary : Colors.grey[300],
                                   borderRadius: BorderRadius.only(
-                                    topLeft: const Radius.circular(12),
-                                    topRight: const Radius.circular(12),
-                                    bottomLeft: Radius.circular(mine ? 12 : 0),
-                                    bottomRight: Radius.circular(mine ? 0 : 12),
+                                    topLeft: Radius.circular(r(12)),
+                                    topRight: Radius.circular(r(12)),
+                                    bottomLeft: Radius.circular(mine ? r(12) : 0),
+                                    bottomRight: Radius.circular(mine ? 0 : r(12)),
                                   ),
                                 ),
                                 child: Column(
@@ -253,16 +340,16 @@ class _ChatScreenState extends State<ChatScreen> {
                                       data['text'] ?? '',
                                       style: TextStyle(
                                         color: mine ? Colors.white : Colors.black87,
-                                        fontSize: 15,
+                                        fontSize: r(15),
                                       ),
                                     ),
                                     if (time.isNotEmpty)
                                       Padding(
-                                        padding: const EdgeInsets.only(top: 4),
+                                        padding: EdgeInsets.only(top: r(4)),
                                         child: Text(
                                           time,
                                           style: TextStyle(
-                                            fontSize: 12,
+                                            fontSize: r(12),
                                             color: mine ? Colors.white70 : Colors.black54,
                                           ),
                                         ),
@@ -278,7 +365,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   Container(
                     color: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: EdgeInsets.symmetric(horizontal: r(12), vertical: r(10)),
                     child: Row(
                       children: [
                         Expanded(
@@ -288,17 +375,17 @@ class _ChatScreenState extends State<ChatScreen> {
                             decoration: InputDecoration(
                               hintText: 'Message...',
                               contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  EdgeInsets.symmetric(horizontal: r(16), vertical: r(10)),
                               filled: true,
                               fillColor: bg,
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(25),
+                                borderRadius: BorderRadius.circular(r(25)),
                                 borderSide: BorderSide.none,
                               ),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: r(8)),
                         Container(
                           decoration: BoxDecoration(
                             color: secondary,

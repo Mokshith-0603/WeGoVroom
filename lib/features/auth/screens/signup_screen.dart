@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../utils/responsive.dart';
+import 'landing_screen.dart';
 import '../../profile/screens/profile_setup_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -16,6 +18,8 @@ class _SignupScreenState extends State<SignupScreen> {
   final confirm = TextEditingController();
 
   bool loading = false;
+  bool _showPassword = false;
+  bool _showConfirmPassword = false;
 
   Future<void> create() async {
     if (pass.text != confirm.text) {
@@ -47,9 +51,10 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final r = context.rs;
     return Scaffold(
       body: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: EdgeInsets.symmetric(horizontal: r(24)),
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [Color(0xfff5f7ff), Colors.white],
@@ -58,33 +63,78 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Stack(
             children: [
-              const CircleAvatar(
-                radius: 42,
-                backgroundColor: Colors.white,
-                child: Icon(Icons.person_add_alt_1, size: 32),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: ResponsiveContent(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+               CircleAvatar(
+                 radius: r(42),
+                 backgroundColor: Colors.white,
+                child: Icon(Icons.person_add_alt_1, size: r(32)),
               ),
 
-              const SizedBox(height: 24),
+              SizedBox(height: r(24)),
 
-              const Text(
+              Text(
                 "Create your account",
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: r(26), fontWeight: FontWeight.bold),
               ),
 
-              const SizedBox(height: 32),
+              SizedBox(height: r(32)),
 
               _field(email, "College email", Icons.email),
-              const SizedBox(height: 12),
-              _field(pass, "Password", Icons.lock, obscure: true),
-              const SizedBox(height: 12),
-              _field(confirm, "Confirm Password", Icons.lock, obscure: true),
+              SizedBox(height: r(12)),
+              _field(
+                pass,
+                "Password",
+                Icons.lock,
+                obscure: true,
+                visible: _showPassword,
+                onToggleVisibility: () {
+                  setState(() => _showPassword = !_showPassword);
+                },
+              ),
+              SizedBox(height: r(12)),
+              _field(
+                confirm,
+                "Confirm Password",
+                Icons.lock,
+                obscure: true,
+                visible: _showConfirmPassword,
+                onToggleVisibility: () {
+                  setState(() => _showConfirmPassword = !_showConfirmPassword);
+                },
+              ),
 
-              const SizedBox(height: 24),
+              SizedBox(height: r(24)),
 
-              _button()
+               _button()
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              Align(
+                alignment: Alignment.topLeft,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LandingScreen()),
+                    );
+                  },
+                ),
+              ),
             ],
           ),
         ),
@@ -93,32 +143,40 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Widget _field(TextEditingController c, String h, IconData i,
-      {bool obscure = false}) {
+      {bool obscure = false, bool visible = false, VoidCallback? onToggleVisibility}) {
+    final r = context.rs;
     return TextField(
       controller: c,
-      obscureText: obscure,
+      obscureText: obscure ? !visible : false,
       decoration: InputDecoration(
         hintText: h,
         prefixIcon: Icon(i),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        suffixIcon: obscure
+            ? IconButton(
+                icon: Icon(visible ? Icons.visibility_off : Icons.visibility),
+                onPressed: onToggleVisibility,
+              )
+            : null,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(r(14))),
       ),
     );
   }
 
   Widget _button() {
+    final r = context.rs;
     return SizedBox(
       width: double.infinity,
-      height: 56,
+      height: r(56),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(r(30)),
           gradient:
               const LinearGradient(colors: [Color(0xffff7a00), Color(0xffff9a3c)]),
         ),
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(r(30)),
             onTap: loading ? null : create,
             child: Center(
               child: loading

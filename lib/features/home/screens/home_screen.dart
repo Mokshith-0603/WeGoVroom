@@ -8,6 +8,7 @@ import '../../notifications/screens/notifications_screen.dart';
 import '../../profile/widgets/profile_drawer.dart';
 import '../../profile/widgets/avatar_utils.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../utils/responsive.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -76,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final scheme = theme.colorScheme;
     final secondary = scheme.secondary;
     final bg = theme.scaffoldBackgroundColor;
+    final r = context.rs;
 
     String greeting() {
       final hr = DateTime.now().hour;
@@ -130,11 +132,12 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
 
       body: SafeArea(
-        child: Column(
+        child: ResponsiveContent(
+          child: Column(
           children: [
             /// HEADER
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: r(16), vertical: r(10)),
               child: Row(
                 children: [
                   Builder(
@@ -144,13 +147,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: FutureBuilder<int>(
                           future: getAvatarIndex(),
                           builder: (_, snap) {
-                            return buildAvatar(snap.data ?? 0, radius: 22);
+                            return buildAvatar(snap.data ?? 0, radius: r(22));
                           },
                         ),
                       );
                     },
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: r(12)),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -166,8 +169,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             if (name.isEmpty) return const SizedBox.shrink();
                             return Text(
                               'Hi 👋 $name',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: r(16)),
                             );
                           },
                         ),
@@ -205,7 +208,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             /// SEARCH
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: r(16)),
               child: TextField(
                 decoration: InputDecoration(
                   hintText: "Search trips, destinations...",
@@ -213,20 +216,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(r(30)),
                     borderSide: BorderSide.none,
                   ),
                 ),
               ),
             ),
 
-            const SizedBox(height: 12),
+            SizedBox(height: r(12)),
 
             /// CHIPS
             SizedBox(
-              height: 40,
+              height: r(40),
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.symmetric(horizontal: r(16)),
                 scrollDirection: Axis.horizontal,
                 itemCount: chips.length,
                 itemBuilder: (_, i) {
@@ -236,12 +239,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   return GestureDetector(
                     onTap: () => setState(() => selectedChip = label),
                     child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 8),
+                      margin: EdgeInsets.only(right: r(8)),
+                      padding: EdgeInsets.symmetric(
+                          horizontal: r(14), vertical: r(8)),
                       decoration: BoxDecoration(
                         color: selected ? secondary : Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(r(20)),
                       ),
                       child: Text(
                         label,
@@ -256,7 +259,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            const SizedBox(height: 10),
+            SizedBox(height: r(10)),
 
             /// ⭐ ACTIVE TRIPS ONLY
             Expanded(
@@ -290,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   }).toList();
 
                   return ListView.builder(
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(r(16)),
                     itemCount: filtered.length,
                     itemBuilder: (_, i) {
                       final doc = filtered[i];
@@ -306,6 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ],
+          ),
         ),
       ),
     );
