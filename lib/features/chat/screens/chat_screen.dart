@@ -37,8 +37,19 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  DateTime? _tripDateTime(Map<String, dynamic> tripData) {
+    final ts = tripData['dateTime'];
+    try {
+      if (ts is Timestamp) return ts.toDate();
+    } catch (_) {}
+    return null;
+  }
+
   bool _isTripActive(Map<String, dynamic> tripData) {
-    return tripData['completed'] != true;
+    if (tripData['completed'] == true) return false;
+    final dt = _tripDateTime(tripData);
+    if (dt == null) return false;
+    return dt.isAfter(DateTime.now());
   }
 
   int _tripSortScore(Map<String, dynamic> tripData) {

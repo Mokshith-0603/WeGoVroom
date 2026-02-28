@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../../../utils/responsive.dart';
+import '../../../utils/transport_icons.dart';
 import 'trip_detail_screen.dart';
 
 class MyTripsScreen extends StatelessWidget {
@@ -73,6 +74,7 @@ class MyTripsScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final secondary = theme.colorScheme.secondary;
     final r = context.rs;
+    final tripIcon = destinationTransportIcon(data["to"]?.toString());
 
     return InkWell(
       borderRadius: BorderRadius.circular(r(18)),
@@ -90,7 +92,7 @@ class MyTripsScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.directions_bus, color: secondary),
+                Icon(tripIcon, color: secondary),
                 SizedBox(width: r(8)),
                 Expanded(
                   child: Text(

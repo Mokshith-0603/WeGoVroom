@@ -14,6 +14,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   final _messageController = TextEditingController();
+  static const _accent = Color(0xffff7a00);
 
   String? _selectedUserId;
   bool _sendToAll = false;
@@ -97,12 +98,18 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Admin Notifications")),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text("Admin Notifications"),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
       body: StreamBuilder<QuerySnapshot>(
         stream: _db.collection("users").snapshots(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator(color: _accent));
           }
 
           final docs = snap.data?.docs ?? const [];
@@ -139,6 +146,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                 SwitchListTile(
                   value: _sendToAll,
                   onChanged: (v) => setState(() => _sendToAll = v),
+                  activeColor: _accent,
                   title: const Text("Send to all users"),
                 ),
                 if (!_sendToAll)
@@ -163,6 +171,13 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                     onChanged: (v) => setState(() => _selectedUserId = v),
                     decoration: const InputDecoration(
                       labelText: "Select user",
+                      labelStyle: TextStyle(color: Colors.black87),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: _accent, width: 1.4),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: Colors.black26),
+                      ),
                     ),
                   ),
                 const SizedBox(height: 12),
@@ -172,20 +187,42 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
                   decoration: const InputDecoration(
                     labelText: "Message",
                     hintText: "Type notification message",
+                    labelStyle: TextStyle(color: Colors.black87),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: _accent, width: 1.4),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.black26),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _accent,
+                      foregroundColor: Colors.black,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                     onPressed: _sending ? null : _sendNotifications,
                     child: _sending
                         ? const SizedBox(
                             height: 18,
                             width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.black,
+                            ),
                           )
-                        : const Text("Send Notification"),
+                        : const Text(
+                            "Send Notification",
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
                   ),
                 ),
               ],

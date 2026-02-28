@@ -160,6 +160,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         controller: nameController,
                         decoration: const InputDecoration(
                           labelText: "Full Name",
+                          prefixIcon: Icon(Icons.person),
                         ),
                       ),
 
@@ -169,6 +170,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         controller: regController,
                         decoration: const InputDecoration(
                           labelText: "Register number",
+                          prefixIcon: Icon(Icons.badge_outlined),
                         ),
                       ),
 
@@ -176,6 +178,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
                       DropdownButtonFormField(
                         value: gender,
+                        decoration: const InputDecoration(
+                          labelText: "Gender",
+                          prefixIcon: Icon(Icons.wc),
+                        ),
                         items: const [
                           DropdownMenuItem(
                               value: "Male", child: Text("Male")),
@@ -194,6 +200,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(
                           labelText: "Phone number",
+                          prefixIcon: Icon(Icons.phone),
                         ),
                       ),
                     ],
