@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
 
@@ -24,6 +25,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   int maxPeople = 4;
   bool isPublic = true;
   bool loading = false;
+  final Set<String> _selectedInviteeIds = {};
+  final Map<String, String> _selectedInviteeNames = {};
+  final Set<String> _selectedInviteeEmails = {};
 
   final db = FirebaseFirestore.instance;
 
@@ -121,6 +125,13 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       return;
     }
 
+    if (!isPublic && _selectedInviteeIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Select at least one invitee for a private trip")),
+      );
+      return;
+    }
+
     setState(() => loading = true);
 
     try {
@@ -163,6 +174,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         "joined": 1,
         "description": descController.text.trim(),
         "isPublic": isPublic,
+        "invitedUserIds": isPublic ? <String>[] : _selectedInviteeIds.toList(),
+        "invitedUserEmails": isPublic ? <String>[] : _selectedInviteeEmails.toList(),
         "dateTime": dateTime,
         "createdAt": FieldValue.serverTimestamp(),
       });
@@ -183,6 +196,86 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     }
 
     setState(() => loading = false);
+  }
+
+  Future<void> _pickInvitees(String currentUid) async {
+    final usersSnap = await db.collection("users").get();
+    final candidates = usersSnap.docs.where((d) => d.id != currentUid).toList();
+    final tempSelected = <String>{..._selectedInviteeIds};
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Invite People"),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 360,
+                child: candidates.isEmpty
+                    ? const Center(child: Text("No users available"))
+                    : ListView.builder(
+                        itemCount: candidates.length,
+                        itemBuilder: (_, i) {
+                          final doc = candidates[i];
+                          final data = doc.data();
+                          final name = (data["displayName"] ?? "User").toString();
+                          final email = (data["email"] ?? "").toString();
+                          final selected = tempSelected.contains(doc.id);
+
+                          return CheckboxListTile(
+                            value: selected,
+                            title: Text(name),
+                            subtitle: email.isEmpty ? null : Text(email),
+                            onChanged: (v) {
+                              setDialogState(() {
+                                if (v == true) {
+                                  tempSelected.add(doc.id);
+                                } else {
+                                  tempSelected.remove(doc.id);
+                                }
+                              });
+                            },
+                          );
+                        },
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    setState(() {
+                      _selectedInviteeIds
+                        ..clear()
+                        ..addAll(tempSelected);
+                      _selectedInviteeNames.clear();
+                      _selectedInviteeEmails.clear();
+                      for (final doc in candidates) {
+                        if (_selectedInviteeIds.contains(doc.id)) {
+                          final data = doc.data();
+                          _selectedInviteeNames[doc.id] =
+                              (data["displayName"] ?? data["email"] ?? "User").toString();
+                          final email = (data["email"] ?? "").toString().trim().toLowerCase();
+                          if (email.isNotEmpty) {
+                            _selectedInviteeEmails.add(email);
+                          }
+                        }
+                      }
+                    });
+                    Navigator.pop(context);
+                  },
+                  child: const Text("Done"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget section(String title, IconData icon, Widget child) {
@@ -212,6 +305,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   @override
   Widget build(BuildContext context) {
     final isOther = selectedDestination == "Other";
+    final user = fb.FirebaseAuth.instance.currentUser;
 
     return Scaffold(
       appBar: AppBar(title: const Text("Create Trip")),
@@ -319,11 +413,57 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               Icons.visibility_outlined,
               SwitchListTile(
                 value: isPublic,
-                onChanged: (v) => setState(() => isPublic = v),
+                onChanged: (v) => setState(() {
+                  isPublic = v;
+                  if (isPublic) {
+                    _selectedInviteeIds.clear();
+                    _selectedInviteeNames.clear();
+                  }
+                }),
                 title: const Text("Public trip"),
                 subtitle: const Text("Anyone can join instantly"),
               ),
             ),
+            if (!isPublic)
+              section(
+                "Invite People",
+                Icons.person_add_alt_1_outlined,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _selectedInviteeIds.isEmpty
+                          ? "No invitees selected"
+                          : "${_selectedInviteeIds.length} invitee(s) selected",
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: user == null ? null : () => _pickInvitees(user.uid),
+                      icon: const Icon(Icons.group_add_outlined),
+                      label: const Text("Choose Invitees"),
+                    ),
+                  if (_selectedInviteeNames.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _selectedInviteeIds.map((uid) {
+                          final label = _selectedInviteeNames[uid] ?? "User";
+                          return Chip(
+                            label: Text(label),
+                            onDeleted: () {
+                              setState(() {
+                                _selectedInviteeIds.remove(uid);
+                                _selectedInviteeNames.remove(uid);
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,

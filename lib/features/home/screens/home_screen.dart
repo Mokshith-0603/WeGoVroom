@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:provider/provider.dart';
 
 import '../../../widgets/trip_card.dart';
@@ -279,7 +280,25 @@ class _HomeScreenState extends State<HomeScreen> {
                     final data = doc.data() as Map<String, dynamic>;
                     final dt = data["dateTime"]?.toDate();
                     if (dt == null) return false;
-                    return dt.isAfter(now);
+                    if (!dt.isAfter(now)) return false;
+
+                    final isPublicTrip = data["isPublic"] != false;
+                    if (isPublicTrip) return true;
+
+                    final currentUser = fb.FirebaseAuth.instance.currentUser;
+                    if (currentUser == null) return false;
+                    if (data["ownerId"] == currentUser.uid) return true;
+
+                    final invitedIds = ((data["invitedUserIds"] as List?) ?? const [])
+                        .map((e) => e.toString())
+                        .toSet();
+                    final invitedEmails = ((data["invitedUserEmails"] as List?) ?? const [])
+                        .map((e) => e.toString().trim().toLowerCase())
+                        .toSet();
+                    final currentEmail = (currentUser.email ?? "").trim().toLowerCase();
+
+                    return invitedIds.contains(currentUser.uid) ||
+                        (currentEmail.isNotEmpty && invitedEmails.contains(currentEmail));
                   }).toList();
 
                   if (docs.isEmpty) {

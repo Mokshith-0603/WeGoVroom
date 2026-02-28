@@ -74,6 +74,25 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
+    final isPublicTrip = trip["isPublic"] != false;
+    final invitedIds = ((trip["invitedUserIds"] as List?) ?? const [])
+        .map((e) => e.toString())
+        .toSet();
+    final invitedEmails = ((trip["invitedUserEmails"] as List?) ?? const [])
+        .map((e) => e.toString().trim().toLowerCase())
+        .toSet();
+    final ownerId = trip["ownerId"]?.toString();
+    final isInvited = invitedIds.contains(user.uid);
+    final isEmailInvited = (user.email != null) &&
+        invitedEmails.contains(user.email!.trim().toLowerCase());
+    final canJoinPrivate = isPublicTrip || user.uid == ownerId || isInvited || isEmailInvited;
+    if (!canJoinPrivate) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("This is a private trip. You are not invited.")),
+      );
+      return;
+    }
+
     setState(() => loading = true);
 
     try {
@@ -389,6 +408,20 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
         final expired = dt != null ? DateTime.now().isAfter(dt) : false;
         final completed = d["completed"] == true;
+        final isPublicTrip = d["isPublic"] != false;
+        final invitedIds = ((d["invitedUserIds"] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toSet();
+        final invitedEmails = ((d["invitedUserEmails"] as List?) ?? const [])
+            .map((e) => e.toString().trim().toLowerCase())
+            .toSet();
+        final isEmailInvited = user?.email != null &&
+            invitedEmails.contains(user!.email!.trim().toLowerCase());
+        final canJoinByInvite = user != null &&
+            (isPublicTrip ||
+                user.uid == d["ownerId"] ||
+                invitedIds.contains(user.uid) ||
+                isEmailInvited);
         final allowReview = completed;
         final dateText = dt != null ? "${dt.day}/${dt.month}/${dt.year}" : "";
         final timeText = dt != null ? TimeOfDay.fromDateTime(dt).format(context) : "";
@@ -537,13 +570,15 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                         borderRadius: BorderRadius.circular(30),
                       ),
                     ),
-                    onPressed: (loading || seatsLeft <= 0 || joinedAlready)
+                    onPressed: (loading || seatsLeft <= 0 || joinedAlready || !canJoinByInvite)
                         ? null
                         : () => handleJoin(d),
                     child: loading
                         ? const CircularProgressIndicator(color: Colors.white)
                         : Text(
-                            joinedAlready ? "Joined" : "Join Trip",
+                            joinedAlready
+                                ? "Joined"
+                                : (canJoinByInvite ? "Join Trip" : "Invite Only"),
                             style: const TextStyle(
                               color: Colors.black,
                               fontWeight: FontWeight.bold,

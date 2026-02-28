@@ -9,6 +9,43 @@ service cloud.firestore {
       return request.auth.uid;
     }
 
+    function tripPath(tripId) {
+      return /databases/$(database)/documents/trips/$(tripId);
+    }
+
+    function tripExists(tripId) {
+      return exists(tripPath(tripId));
+    }
+
+    function tripData(tripId) {
+      return get(tripPath(tripId)).data;
+    }
+
+    function tripOwnerId(tripId) {
+      return tripData(tripId).ownerId;
+    }
+
+    function isTripOwner(tripId) {
+      return signedIn() && tripExists(tripId) && tripOwnerId(tripId) == uid();
+    }
+
+    function canSelfJoinTrip(tripId) {
+      return tripExists(tripId)
+        && (
+          tripData(tripId).isPublic != false
+          || tripOwnerId(tripId) == uid()
+          || (
+            tripData(tripId).invitedUserIds is list
+            && tripData(tripId).invitedUserIds.hasAny([uid()])
+          )
+          || (
+            request.auth.token.email is string
+            && tripData(tripId).invitedUserEmails is list
+            && tripData(tripId).invitedUserEmails.hasAny([request.auth.token.email])
+          )
+        );
+    }
+
     function isAdmin() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -36,7 +73,18 @@ service cloud.firestore {
     // Trip participants
     match /tripParticipants/{participant} {
       allow read, list: if signedIn();
-      allow create, write, delete: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.tripId is string
+        && request.resource.data.userId is string
+        && (
+          (
+            request.resource.data.userId == uid()
+            && canSelfJoinTrip(request.resource.data.tripId)
+          )
+          || isTripOwner(request.resource.data.tripId)
+        );
+      allow update: if false;
+      allow delete: if signedIn();
     }
 
     // Trip requests/join requests
