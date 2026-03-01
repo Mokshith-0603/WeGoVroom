@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import '../../../utils/transport_icons.dart';
 import '../../../utils/responsive.dart';
 
@@ -67,7 +66,9 @@ class _DriversScreenState extends State<DriversScreen> {
           normalizedRole(claims['role']) == 'admin') {
         return true;
       }
-    } catch (_) {}
+    } catch (_) {
+      // Fallback to user document if token claims are unavailable.
+    }
 
     final doc = await _db.collection('users').doc(user.uid).get();
     if (!doc.exists) return false;
@@ -92,7 +93,10 @@ class _DriversScreenState extends State<DriversScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
+                TextField(
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
                 TextField(
                   controller: phone,
                   keyboardType: TextInputType.phone,
@@ -111,7 +115,10 @@ class _DriversScreenState extends State<DriversScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
               onPressed: () async {
                 final driverName = name.text.trim();
@@ -152,7 +159,10 @@ class _DriversScreenState extends State<DriversScreen> {
     );
   }
 
-  Future<void> _showEditDriverDialog(String driverId, Map<String, dynamic> driverData) async {
+  Future<void> _showEditDriverDialog(
+    String driverId,
+    Map<String, dynamic> driverData,
+  ) async {
     final name = TextEditingController(text: (driverData['name'] ?? '').toString());
     final phone = TextEditingController(text: (driverData['phone'] ?? '').toString());
     final vehicle = TextEditingController(text: (driverData['vehicle'] ?? '').toString());
@@ -167,7 +177,10 @@ class _DriversScreenState extends State<DriversScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: name, decoration: const InputDecoration(labelText: 'Name')),
+                TextField(
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
                 TextField(
                   controller: phone,
                   keyboardType: TextInputType.phone,
@@ -186,7 +199,10 @@ class _DriversScreenState extends State<DriversScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
               onPressed: () async {
                 final driverName = name.text.trim();
@@ -235,8 +251,14 @@ class _DriversScreenState extends State<DriversScreen> {
           title: const Text('Delete Driver'),
           content: const Text('Are you sure you want to delete this driver?'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
           ],
         );
       },
@@ -247,7 +269,9 @@ class _DriversScreenState extends State<DriversScreen> {
     try {
       await _db.collection('drivers').doc(driverId).delete();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Driver deleted')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Driver deleted')),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -256,24 +280,28 @@ class _DriversScreenState extends State<DriversScreen> {
     }
   }
 
-  Widget _driverCard(String driverId, Map<String, dynamic> d, BuildContext context) {
+  Widget _driverCard(
+    String driverId,
+    Map<String, dynamic> d,
+    BuildContext context,
+  ) {
     final name = d['name'] ?? 'Driver';
     final phone = d['phone'] ?? '';
     final vehicle = d['vehicle'] ?? '';
     final rating = (d['rating'] ?? 4.5).toString();
     final vehicleIcon = vehicleTransportIcon(vehicle.toString());
 
-    final secondary = Theme.of(context).colorScheme.secondary;
+    final theme = Theme.of(context);
+    final secondary = theme.colorScheme.secondary;
     final r = context.rs;
 
     return Container(
       margin: EdgeInsets.only(bottom: r(14)),
       padding: EdgeInsets.all(r(16)),
       decoration: BoxDecoration(
-        color: Colors.black,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(r(18)),
-        border: Border.all(color: secondary.withOpacity(0.35)),
-        boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
+        boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black12)],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -281,7 +309,7 @@ class _DriversScreenState extends State<DriversScreen> {
           CircleAvatar(
             radius: r(28),
             backgroundColor: secondary,
-            child: Icon(vehicleIcon, color: Colors.black),
+            child: Icon(vehicleIcon, color: Colors.white),
           ),
           SizedBox(width: r(14)),
           Expanded(
@@ -290,16 +318,19 @@ class _DriversScreenState extends State<DriversScreen> {
               children: [
                 Text(
                   name,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: r(16), color: Colors.white),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: r(16)),
                 ),
-                Text(vehicle, style: const TextStyle(color: Colors.white70)),
+                Text(vehicle, style: const TextStyle(color: Colors.grey)),
                 SizedBox(height: r(4)),
-                Text('Phone: $phone', style: const TextStyle(color: Colors.white70)),
+                Text(
+                  'Phone: $phone',
+                  style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[800]),
+                ),
                 SizedBox(height: r(4)),
                 Row(
                   children: [
                     Icon(Icons.star, size: r(16), color: secondary),
-                    Text(' $rating', style: TextStyle(color: secondary)),
+                    Text(rating),
                   ],
                 ),
               ],
@@ -312,8 +343,11 @@ class _DriversScreenState extends State<DriversScreen> {
                   onTap: () => callDriver(phone),
                   child: Container(
                     padding: EdgeInsets.all(r(10)),
-                    decoration: BoxDecoration(color: secondary, shape: BoxShape.circle),
-                    child: const Icon(Icons.call, color: Colors.black),
+                    decoration: BoxDecoration(
+                      color: secondary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.call, color: Colors.white),
                   ),
                 ),
               if (_isAdminUser) ...[
@@ -321,13 +355,13 @@ class _DriversScreenState extends State<DriversScreen> {
                 IconButton(
                   tooltip: 'Edit Driver',
                   onPressed: () => _showEditDriverDialog(driverId, d),
-                  icon: Icon(Icons.edit_outlined, color: secondary),
+                  icon: const Icon(Icons.edit_outlined),
                 ),
                 IconButton(
                   tooltip: 'Delete Driver',
                   onPressed: () => _deleteDriver(driverId),
                   icon: const Icon(Icons.delete_outline),
-                  color: Colors.red.shade300,
+                  color: Colors.red.shade600,
                 ),
               ],
             ],
@@ -339,6 +373,7 @@ class _DriversScreenState extends State<DriversScreen> {
 
   Widget _buildBody(BuildContext context) {
     final r = context.rs;
+
     return StreamBuilder<QuerySnapshot>(
       stream: _db.collection('drivers').snapshots(),
       builder: (_, snap) {
@@ -358,7 +393,9 @@ class _DriversScreenState extends State<DriversScreen> {
               padding: EdgeInsets.fromLTRB(r(16), r(12), r(16), r(8)),
               child: Text(
                 'Best drivers who take you at the best price.',
-                style: TextStyle(color: Colors.grey[700]),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[700],
+                    ),
               ),
             ),
             Expanded(
@@ -380,25 +417,24 @@ class _DriversScreenState extends State<DriversScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final secondary = Theme.of(context).colorScheme.secondary;
+    final theme = Theme.of(context);
+    final bg = theme.scaffoldBackgroundColor;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        title: const Text(
+        title: Text(
           'Drivers',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          style: theme.textTheme.headlineMedium?.copyWith(color: Colors.black),
         ),
+        backgroundColor: bg,
         elevation: 0,
-        iconTheme: IconThemeData(color: secondary),
+        iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: _buildBody(context),
       floatingActionButton: !_adminLoaded || !_isAdminUser
           ? null
           : FloatingActionButton.extended(
-              backgroundColor: secondary,
-              foregroundColor: Colors.black,
               onPressed: _showAddDriverDialog,
               icon: const Icon(Icons.add),
               label: const Text('Add Driver'),
