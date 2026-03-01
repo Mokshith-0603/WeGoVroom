@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 import '../../../utils/responsive.dart';
 import '../../../utils/transport_icons.dart';
 import 'trip_detail_screen.dart';
@@ -10,15 +9,61 @@ import 'trip_detail_screen.dart';
 class MyTripsScreen extends StatelessWidget {
   const MyTripsScreen({super.key});
 
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser!.uid;
+
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final secondary = scheme.secondary;
+    final bg = theme.scaffoldBackgroundColor;
+
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        backgroundColor: bg,
+        appBar: AppBar(
+          backgroundColor: bg,
+          elevation: 0,
+          title: Text(
+            "My Trips",
+            style: theme.textTheme.headlineMedium?.copyWith(color: Colors.black),
+          ),
+          iconTheme: const IconThemeData(color: Colors.black),
+          bottom: TabBar(
+            isScrollable: context.isTablet,
+            labelColor: secondary,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: secondary,
+            tabs: const [
+              Tab(text: "Hosting"),
+              Tab(text: "Joined"),
+              Tab(text: "Pending"),
+              Tab(text: "History"),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _hosting(uid, context),
+            _joined(uid, context),
+            _pending(uid, context),
+            _history(uid, context),
+          ],
+        ),
+      ),
+    );
+  }
+
   DateTime? _tripDateTime(Map<String, dynamic> data) {
-    final raw = data['dateTime'];
+    final raw = data["dateTime"];
     if (raw is Timestamp) return raw.toDate();
     if (raw is DateTime) return raw;
     return null;
   }
 
   String _formatTripDateTime(DateTime dt) {
-    return DateFormat('dd MMM yyyy, hh:mm a').format(dt);
+    return DateFormat("dd MMM yyyy, hh:mm a").format(dt);
   }
 
   bool isActive(Map<String, dynamic> data) {
@@ -38,9 +83,10 @@ class MyTripsScreen extends StatelessWidget {
     Map<String, dynamic> data, {
     VoidCallback? onTap,
   }) {
-    final secondary = Theme.of(context).colorScheme.secondary;
+    final theme = Theme.of(context);
+    final secondary = theme.colorScheme.secondary;
     final r = context.rs;
-    final tripIcon = destinationTransportIcon(data['to']?.toString());
+    final tripIcon = destinationTransportIcon(data["to"]?.toString());
     final tripDateTime = _tripDateTime(data);
 
     return InkWell(
@@ -50,10 +96,9 @@ class MyTripsScreen extends StatelessWidget {
         margin: EdgeInsets.symmetric(horizontal: r(16), vertical: r(8)),
         padding: EdgeInsets.all(r(16)),
         decoration: BoxDecoration(
-          color: Colors.black,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(r(18)),
-          border: Border.all(color: secondary.withValues(alpha: 0.35)),
-          boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
+          boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black12)],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -64,25 +109,26 @@ class MyTripsScreen extends StatelessWidget {
                 SizedBox(width: r(8)),
                 Expanded(
                   child: Text(
-                    '${data['from']} -> ${data['to']}',
-                    style: const TextStyle(
+                    "${data["from"]} -> ${data["to"]}",
+                    style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
                     ),
                   ),
                 ),
               ],
             ),
-            SizedBox(height: r(6)),
+            SizedBox(height: r(4)),
             Text(
-              'Host: ${data['ownerName'] ?? ''}',
-              style: const TextStyle(color: Colors.white70),
+              "Host: ${data["ownerName"] ?? ""}",
+              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
             ),
             if (tripDateTime != null) ...[
               SizedBox(height: r(2)),
               Text(
-                'Date & Time: ${_formatTripDateTime(tripDateTime)}',
-                style: const TextStyle(color: Colors.white70),
+                "Date & Time: ${_formatTripDateTime(tripDateTime)}",
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[700],
+                ),
               ),
             ],
           ],
@@ -93,7 +139,10 @@ class MyTripsScreen extends StatelessWidget {
 
   Widget _hosting(String uid, BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('trips').where('ownerId', isEqualTo: uid).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection("trips")
+          .where("ownerId", isEqualTo: uid)
+          .snapshots(),
       builder: (_, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
 
@@ -103,7 +152,9 @@ class MyTripsScreen extends StatelessWidget {
             .where(isActive)
             .toList();
 
-        if (active.isEmpty) return const Center(child: Text('No active hosted trips'));
+        if (active.isEmpty) {
+          return const Center(child: Text("No active hosted trips"));
+        }
 
         return ListView(children: active.map((d) => _card(context, d)).toList());
       },
@@ -113,14 +164,16 @@ class MyTripsScreen extends StatelessWidget {
   Widget _joined(String uid, BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('tripParticipants')
-          .where('userId', isEqualTo: uid)
+          .collection("tripParticipants")
+          .where("userId", isEqualTo: uid)
           .snapshots(),
       builder: (_, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
 
         final parts = snap.data!.docs;
-        if (parts.isEmpty) return const Center(child: Text('No joined trips'));
+        if (parts.isEmpty) {
+          return const Center(child: Text("No joined trips"));
+        }
 
         return FutureBuilder<List<DocumentSnapshot>>(
           future: _fetchTrips(parts),
@@ -135,7 +188,9 @@ class MyTripsScreen extends StatelessWidget {
                 .where(isActive)
                 .toList();
 
-            if (trips.isEmpty) return const Center(child: Text('No active joined trips'));
+            if (trips.isEmpty) {
+              return const Center(child: Text("No active joined trips"));
+            }
 
             return ListView(children: trips.map((d) => _card(context, d)).toList());
           },
@@ -147,15 +202,17 @@ class MyTripsScreen extends StatelessWidget {
   Widget _pending(String uid, BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
-          .collection('tripRequests')
-          .where('userId', isEqualTo: uid)
-          .where('status', isEqualTo: 'pending')
+          .collection("tripRequests")
+          .where("userId", isEqualTo: uid)
+          .where("status", isEqualTo: "pending")
           .snapshots(),
       builder: (_, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
 
         final reqs = snap.data!.docs;
-        if (reqs.isEmpty) return const Center(child: Text('No pending requests'));
+        if (reqs.isEmpty) {
+          return const Center(child: Text("No pending requests"));
+        }
 
         return FutureBuilder<List<DocumentSnapshot>>(
           future: _fetchTrips(reqs),
@@ -178,7 +235,7 @@ class MyTripsScreen extends StatelessWidget {
 
   Widget _history(String uid, BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('trips').snapshots(),
+      stream: FirebaseFirestore.instance.collection("trips").snapshots(),
       builder: (_, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
 
@@ -187,7 +244,9 @@ class MyTripsScreen extends StatelessWidget {
             .where((e) => isPast(e.data() as Map<String, dynamic>))
             .toList();
 
-        if (pastDocs.isEmpty) return const Center(child: Text('No trip history'));
+        if (pastDocs.isEmpty) {
+          return const Center(child: Text("No trip history"));
+        }
 
         return ListView(
           children: pastDocs.map((doc) {
@@ -199,7 +258,10 @@ class MyTripsScreen extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => TripDetailScreen(tripId: doc.id, data: data),
+                    builder: (_) => TripDetailScreen(
+                      tripId: doc.id,
+                      data: data,
+                    ),
                   ),
                 );
               },
@@ -213,52 +275,9 @@ class MyTripsScreen extends StatelessWidget {
   Future<List<DocumentSnapshot>> _fetchTrips(List<QueryDocumentSnapshot> source) async {
     final db = FirebaseFirestore.instance;
     final futures = source.map((d) {
-      final tripId = d['tripId'];
-      return db.collection('trips').doc(tripId).get();
+      final tripId = d["tripId"];
+      return db.collection("trips").doc(tripId).get();
     });
     return Future.wait(futures);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final secondary = Theme.of(context).colorScheme.secondary;
-    final r = context.rs;
-
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          backgroundColor: Colors.black,
-          elevation: 0,
-          toolbarHeight: r(58),
-          title: const Text(
-            'My Trips',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-          ),
-          bottom: TabBar(
-            isScrollable: true,
-            labelColor: secondary,
-            unselectedLabelColor: Colors.white60,
-            indicatorColor: secondary,
-            tabs: const [
-              Tab(text: 'Hosting'),
-              Tab(text: 'Joined'),
-              Tab(text: 'Pending'),
-              Tab(text: 'History'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _hosting(uid, context),
-            _joined(uid, context),
-            _pending(uid, context),
-            _history(uid, context),
-          ],
-        ),
-      ),
-    );
   }
 }
