@@ -86,6 +86,15 @@ class _SignupScreenState extends State<SignupScreen> {
                 "Create your account",
                 style: TextStyle(fontSize: r(26), fontWeight: FontWeight.bold),
               ),
+              SizedBox(height: r(6)),
+              Text(
+                "Use only college email ids",
+                style: TextStyle(
+                  fontSize: r(12.5),
+                  color: const Color(0xffff7a00),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
 
               SizedBox(height: r(32)),
 

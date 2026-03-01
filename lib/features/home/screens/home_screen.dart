@@ -31,27 +31,17 @@ class _HomeScreenState extends State<HomeScreen> {
   String selectedChip = "All";
   String _searchQuery = "";
 
-  /// ⭐ CHECK ACTIVE TRIP (BLOCK CREATE)
   Future<bool> hasActiveTrip(String uid) async {
     final db = FirebaseFirestore.instance;
-
-    // check both participant records and owned trips
     final now = DateTime.now();
 
-    // owned trip
-    final ownSnap = await db
-        .collection("trips")
-        .where("ownerId", isEqualTo: uid)
-        .get();
+    final ownSnap = await db.collection("trips").where("ownerId", isEqualTo: uid).get();
     for (final t in ownSnap.docs) {
       final dt = t.data()["dateTime"]?.toDate();
       if (dt != null && dt.isAfter(now)) return true;
     }
 
-    final parts = await db
-        .collection("tripParticipants")
-        .where("userId", isEqualTo: uid)
-        .get();
+    final parts = await db.collection("tripParticipants").where("userId", isEqualTo: uid).get();
 
     for (final p in parts.docs) {
       final tripId = p["tripId"];
@@ -88,7 +78,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return 'Good evening';
     }
 
-    /// ⭐ FETCH NAME FROM FIRESTORE
     Future<String> getDisplayName() async {
       if (user == null) return '';
       final doc = await db.collection('users').doc(user.uid).get();
@@ -107,16 +96,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-
       drawer: const ProfileDrawer(),
-
-      /// ⭐ FAB — BLOCK IF ACTIVE
       floatingActionButton: FloatingActionButton(
         backgroundColor: secondary,
         onPressed: () async {
           if (user == null) return;
 
           final active = await hasActiveTrip(user.uid);
+          if (!mounted) return;
 
           if (active) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -132,218 +119,199 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         child: const Icon(Icons.add),
       ),
-
       body: SafeArea(
         child: ResponsiveContent(
           child: Column(
-          children: [
-            /// HEADER
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: r(16), vertical: r(10)),
-              child: Row(
-                children: [
-                  Builder(
-                    builder: (context) {
-                      return GestureDetector(
-                        onTap: () => Scaffold.of(context).openDrawer(),
-                        child: FutureBuilder<int>(
-                          future: getAvatarIndex(),
-                          builder: (_, snap) {
-                            return buildAvatar(snap.data ?? 0, radius: r(22));
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                  SizedBox(width: r(12)),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          greeting(),
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        FutureBuilder<String>(
-                          future: getDisplayName(),
-                          builder: (_, snap) {
-                            final name = snap.data ?? '';
-                            if (name.isEmpty) return const SizedBox.shrink();
-                            return Text(
-                              'Hi 👋 $name',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: r(16)),
-                            );
-                          },
-                        ),
-                      ],
+            children: [
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: r(16), vertical: r(10)),
+                child: Row(
+                  children: [
+                    Builder(
+                      builder: (context) {
+                        return GestureDetector(
+                          onTap: () => Scaffold.of(context).openDrawer(),
+                          child: FutureBuilder<int>(
+                            future: getAvatarIndex(),
+                            builder: (_, snap) {
+                              return buildAvatar(snap.data ?? 0, radius: r(22));
+                            },
+                          ),
+                        );
+                      },
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.notifications_none),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const NotificationsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-
-                  /// styled app name
-                  RichText(
-                    text: TextSpan(
-                      style: theme.textTheme.headlineMedium,
-                      children: [
-                        const TextSpan(
-                            text: 'WeGo',
-                            style: TextStyle(color: Colors.black)),
-                        TextSpan(
-                            text: 'Vroom',
-                            style: TextStyle(color: secondary)),
-                      ],
+                    SizedBox(width: r(12)),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            greeting(),
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          FutureBuilder<String>(
+                            future: getDisplayName(),
+                            builder: (_, snap) {
+                              final name = snap.data ?? '';
+                              if (name.isEmpty) return const SizedBox.shrink();
+                              return Text(
+                                'Hi $name',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: r(16),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                  )
-                ],
+                    IconButton(
+                      icon: const Icon(Icons.notifications_none),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    RichText(
+                      text: TextSpan(
+                        style: theme.textTheme.headlineMedium,
+                        children: [
+                          const TextSpan(text: 'WeGo', style: TextStyle(color: Colors.black)),
+                          TextSpan(text: 'Vroom', style: TextStyle(color: secondary)),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
               ),
-            ),
-
-            /// SEARCH
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: r(16)),
-              child: TextField(
-                onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
-                decoration: InputDecoration(
-                  hintText: "Search trips, destinations...",
-                  prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(r(30)),
-                    borderSide: BorderSide.none,
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: r(16)),
+                child: TextField(
+                  onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+                  decoration: InputDecoration(
+                    hintText: "Search trips, destinations...",
+                    prefixIcon: const Icon(Icons.search),
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(r(30)),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
-            ),
+              SizedBox(height: r(12)),
+              SizedBox(
+                height: r(40),
+                child: ListView.builder(
+                  padding: EdgeInsets.symmetric(horizontal: r(16)),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: chips.length,
+                  itemBuilder: (_, i) {
+                    final label = chips[i];
+                    final selected = selectedChip == label;
 
-            SizedBox(height: r(12)),
-
-            /// CHIPS
-            SizedBox(
-              height: r(40),
-              child: ListView.builder(
-                padding: EdgeInsets.symmetric(horizontal: r(16)),
-                scrollDirection: Axis.horizontal,
-                itemCount: chips.length,
-                itemBuilder: (_, i) {
-                  final label = chips[i];
-                  final selected = selectedChip == label;
-
-                  return GestureDetector(
-                    onTap: () => setState(() => selectedChip = label),
-                    child: Container(
-                      margin: EdgeInsets.only(right: r(8)),
-                      padding: EdgeInsets.symmetric(
-                          horizontal: r(14), vertical: r(8)),
-                      decoration: BoxDecoration(
-                        color: selected ? secondary : Colors.white,
-                        borderRadius: BorderRadius.circular(r(20)),
-                      ),
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          color: selected ? Colors.white : Colors.black,
-                          fontWeight: FontWeight.w500,
+                    return GestureDetector(
+                      onTap: () => setState(() => selectedChip = label),
+                      child: Container(
+                        margin: EdgeInsets.only(right: r(8)),
+                        padding: EdgeInsets.symmetric(horizontal: r(14), vertical: r(8)),
+                        decoration: BoxDecoration(
+                          color: selected ? secondary : Colors.white,
+                          borderRadius: BorderRadius.circular(r(20)),
+                        ),
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            color: selected ? Colors.white : Colors.black,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
+              SizedBox(height: r(10)),
+              Expanded(
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection("trips").orderBy("dateTime").snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
 
-            SizedBox(height: r(10)),
+                    final now = DateTime.now();
 
-            /// ⭐ ACTIVE TRIPS ONLY
-            Expanded(
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection("trips")
-                    .orderBy("dateTime")
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final now = DateTime.now();
-
-                  final docs = snapshot.data!.docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final dt = data["dateTime"]?.toDate();
-                    if (dt == null) return false;
-                    if (!dt.isAfter(now)) return false;
-
-                    final isPublicTrip = data["isPublic"] != false;
-                    if (isPublicTrip) return true;
-
-                    final currentUser = fb.FirebaseAuth.instance.currentUser;
-                    if (currentUser == null) return false;
-                    if (data["ownerId"] == currentUser.uid) return true;
-
-                    final invitedIds = ((data["invitedUserIds"] as List?) ?? const [])
-                        .map((e) => e.toString())
-                        .toSet();
-                    final invitedEmails = ((data["invitedUserEmails"] as List?) ?? const [])
-                        .map((e) => e.toString().trim().toLowerCase())
-                        .toSet();
-                    final currentEmail = (currentUser.email ?? "").trim().toLowerCase();
-
-                    return invitedIds.contains(currentUser.uid) ||
-                        (currentEmail.isNotEmpty && invitedEmails.contains(currentEmail));
-                  }).toList();
-
-                  if (docs.isEmpty) {
-                    return const Center(child: Text("No active trips"));
-                  }
-
-                  final filtered = docs.where((doc) {
-                    final data = doc.data() as Map<String, dynamic>;
-                    final to = (data["to"] ?? "").toString();
-                    final from = (data["from"] ?? "").toString();
-                    final ownerName = (data["ownerName"] ?? "").toString();
-
-                    final matchesChip = selectedChip == "All" || to == selectedChip;
-                    if (!matchesChip) return false;
-
-                    if (_searchQuery.isEmpty) return true;
-
-                    final haystack =
-                        "$from $to $ownerName".toLowerCase();
-                    return haystack.contains(_searchQuery);
-                  }).toList();
-
-                  if (filtered.isEmpty) {
-                    return const Center(child: Text("No trips match your search"));
-                  }
-
-                  return ListView.builder(
-                    padding: EdgeInsets.all(r(16)),
-                    itemCount: filtered.length,
-                    itemBuilder: (_, i) {
-                      final doc = filtered[i];
+                    final docs = snapshot.data!.docs.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
+                      final dt = data["dateTime"]?.toDate();
+                      if (dt == null) return false;
+                      if (!dt.isAfter(now)) return false;
 
-                      return TripCard(
-                        tripId: doc.id,
-                        data: data,
-                      );
-                    },
-                  );
-                },
+                      final isPublicTrip = data["isPublic"] != false;
+                      if (isPublicTrip) return true;
+
+                      final currentUser = fb.FirebaseAuth.instance.currentUser;
+                      if (currentUser == null) return false;
+                      if (data["ownerId"] == currentUser.uid) return true;
+
+                      final invitedIds = ((data["invitedUserIds"] as List?) ?? const [])
+                          .map((e) => e.toString())
+                          .toSet();
+                      final invitedEmails = ((data["invitedUserEmails"] as List?) ?? const [])
+                          .map((e) => e.toString().trim().toLowerCase())
+                          .toSet();
+                      final currentEmail = (currentUser.email ?? "").trim().toLowerCase();
+
+                      return invitedIds.contains(currentUser.uid) ||
+                          (currentEmail.isNotEmpty && invitedEmails.contains(currentEmail));
+                    }).toList();
+
+                    if (docs.isEmpty) {
+                      return const Center(child: Text("No active trips"));
+                    }
+
+                    final filtered = docs.where((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final to = (data["to"] ?? "").toString();
+                      final from = (data["from"] ?? "").toString();
+                      final ownerName = (data["ownerName"] ?? "").toString();
+
+                      final matchesChip = selectedChip == "All" || to == selectedChip;
+                      if (!matchesChip) return false;
+
+                      if (_searchQuery.isEmpty) return true;
+
+                      final haystack = "$from $to $ownerName".toLowerCase();
+                      return haystack.contains(_searchQuery);
+                    }).toList();
+
+                    if (filtered.isEmpty) {
+                      return const Center(child: Text("No trips match your search"));
+                    }
+
+                    return ListView.builder(
+                      padding: EdgeInsets.all(r(16)),
+                      itemCount: filtered.length,
+                      itemBuilder: (_, i) {
+                        final doc = filtered[i];
+                        final data = doc.data() as Map<String, dynamic>;
+
+                        return TripCard(
+                          tripId: doc.id,
+                          data: data,
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
           ),
         ),
       ),
