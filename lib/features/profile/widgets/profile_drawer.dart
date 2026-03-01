@@ -3,6 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../providers/auth_provider.dart';
+import '../../contact/screens/contact_us_screen.dart';
+import '../../feedback/screens/admin_feedbacks_screen.dart';
+import '../../feedback/screens/feedback_form_screen.dart';
 import '../../notifications/screens/admin_notifications_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
 import '../screens/profile_setup_screen.dart';
@@ -207,6 +210,28 @@ class ProfileDrawer extends StatelessWidget {
                           );
                         },
                       ),
+                      ListTile(
+                        leading: const Icon(Icons.rate_review_outlined),
+                        title: const Text('Feedback'),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const FeedbackFormScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.contact_support_outlined),
+                        title: const Text('Contact Us'),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const ContactUsScreen(),
+                            ),
+                          );
+                        },
+                      ),
                       if (isAdmin)
                         ListTile(
                           leading: const Icon(Icons.campaign_outlined),
@@ -215,6 +240,18 @@ class ProfileDrawer extends StatelessWidget {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => const AdminNotificationsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      if (isAdmin)
+                        ListTile(
+                          leading: const Icon(Icons.feedback_outlined),
+                          title: const Text('User Feedbacks'),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const AdminFeedbacksScreen(),
                               ),
                             );
                           },

@@ -50,19 +50,19 @@ class _StartupSplashScreenState extends State<StartupSplashScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(36),
+                borderRadius: BorderRadius.circular(44),
                 child: Image.asset(
                   'web/icons/Icon-512.png',
-                  width: 132,
-                  height: 132,
-                  fit: BoxFit.cover,
+                  width: 260,
+                  height: 260,
+                  fit: BoxFit.contain,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               RichText(
                 text: const TextSpan(
                   style: TextStyle(
-                    fontSize: 36,
+                    fontSize: 34,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.2,
                   ),

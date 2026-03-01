@@ -47,21 +47,31 @@ service cloud.firestore {
     }
 
     function isAdmin() {
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && (
           request.auth.token.admin == true
+          || request.auth.token.admin == 1
+          || (request.auth.token.admin is string
+            && request.auth.token.admin.matches('(?i)^\\s*(true|1|yes)\\s*$'))
           || request.auth.token.isAdmin == true
-          || request.auth.token.role == "admin"
-          || request.auth.token.role == "Admin"
-          || request.auth.token.role == "ADMIN"
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Admin"
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN"
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == "true"
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == true
-          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == "true"
+          || request.auth.token.isAdmin == 1
+          || (request.auth.token.isAdmin is string
+            && request.auth.token.isAdmin.matches('(?i)^\\s*(true|1|yes)\\s*$'))
+          || (
+            request.auth.token.role is string
+            && request.auth.token.role.matches('(?i)^\\s*admin\\s*$')
+          )
+          || (userDoc.role is string && userDoc.role.matches('(?i)^\\s*admin\\s*$'))
+          || userDoc.isAdmin == true
+          || userDoc.isAdmin == 1
+          || (userDoc.isAdmin is string
+            && userDoc.isAdmin.matches('(?i)^\\s*(true|1|yes)\\s*$'))
+          || userDoc.admin == true
+          || userDoc.admin == 1
+          || (userDoc.admin is string
+            && userDoc.admin.matches('(?i)^\\s*(true|1|yes)\\s*$'))
         );
     }
 
@@ -124,6 +134,16 @@ service cloud.firestore {
 
       allow delete: if signedIn()
         && (resource.data.reviewerId == uid() || isAdmin());
+    }
+
+    // User feedbacks: any signed-in user can submit, only admins can read all
+    match /feedbacks/{feedbackId} {
+      allow create: if signedIn()
+        && request.resource.data.userId == uid();
+
+      allow read, list: if isAdmin();
+
+      allow update, delete: if false;
     }
 
     // Drivers: visible to all signed-in users, add/update/delete by admins only

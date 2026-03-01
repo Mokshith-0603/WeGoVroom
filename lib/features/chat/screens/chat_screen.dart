@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../../../utils/responsive.dart';
+import '../../profile/widgets/avatar_utils.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? tripId;
@@ -20,8 +22,13 @@ class _ChatScreenState extends State<ChatScreen> {
   final db = FirebaseFirestore.instance;
   final uid = FirebaseAuth.instance.currentUser?.uid;
   final controller = TextEditingController();
+
   bool _canChat = false;
   String? _effectiveTripId;
+
+  bool _profileLoaded = false;
+  String _myName = 'User';
+  int _myAvatar = 0;
 
   @override
   void initState() {
@@ -63,15 +70,29 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _ensureMyProfileLoaded() async {
+    if (_profileLoaded || uid == null) return;
+
+    try {
+      final doc = await db.collection('users').doc(uid).get();
+      final data = doc.data() ?? const <String, dynamic>{};
+      _myName = (data['displayName'] ?? data['name'] ?? 'User').toString();
+      _myAvatar = normalizeAvatarIndex(data['avatar']);
+    } catch (_) {
+      _myName = 'User';
+      _myAvatar = 0;
+    }
+
+    _profileLoaded = true;
+  }
+
   Future<String?> _resolveFallbackTripId({String? excludeTripId}) async {
     if (uid == null) return null;
 
     final candidates = <Map<String, dynamic>>[];
 
-    final participantSnap = await db
-        .collection('tripParticipants')
-        .where('userId', isEqualTo: uid)
-        .get();
+    final participantSnap =
+        await db.collection('tripParticipants').where('userId', isEqualTo: uid).get();
 
     for (final p in participantSnap.docs) {
       final tripId = p.data()['tripId'] as String?;
@@ -118,21 +139,36 @@ class _ChatScreenState extends State<ChatScreen> {
     final theme = Theme.of(context);
     final r = context.rs;
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.chat_bubble_outline, size: r(60), color: theme.disabledColor),
-            SizedBox(height: r(12)),
+            Container(
+              height: r(82),
+              width: r(82),
+              decoration: BoxDecoration(
+                color: const Color(0xfffff2e8),
+                borderRadius: BorderRadius.circular(r(22)),
+              ),
+              child: const Icon(
+                Icons.chat_bubble_outline,
+                color: Color(0xffff7a00),
+                size: 38,
+              ),
+            ),
+            SizedBox(height: r(14)),
             Text(
               'No Active Trip Chat',
-              style: theme.textTheme.headlineMedium?.copyWith(fontSize: r(18)),
+              style: theme.textTheme.headlineMedium?.copyWith(fontSize: r(19)),
             ),
             SizedBox(height: r(6)),
             Text(
               'Join a trip to start chatting',
-              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey, fontSize: r(14)),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[600],
+                fontSize: r(14),
+              ),
             ),
           ],
         ),
@@ -146,10 +182,14 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = controller.text.trim();
     if (text.isEmpty) return;
 
+    await _ensureMyProfileLoaded();
+
     try {
       await db.collection('tripMessages').add({
         'tripId': _effectiveTripId,
         'senderId': uid,
+        'senderName': _myName,
+        'senderAvatar': _myAvatar,
         'text': text,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -163,14 +203,92 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Widget _buildMessageItem({
+    required Map<String, dynamic> data,
+    required Map<String, Map<String, dynamic>> participantMeta,
+    required bool mine,
+    required Color secondary,
+  }) {
+    final r = context.rs;
+    final senderId = data['senderId']?.toString() ?? '';
+    final meta = participantMeta[senderId] ?? const <String, dynamic>{};
+
+    final senderName = (data['senderName'] ?? meta['name'] ?? (mine ? 'You' : 'User')).toString();
+    final avatarIndex = normalizeAvatarIndex(data['senderAvatar'] ?? meta['avatar']);
+
+    final timestamp = data['createdAt'] as Timestamp?;
+    final time = timestamp != null ? DateFormat('hh:mm a').format(timestamp.toDate()) : '';
+
+    final bubble = Container(
+      margin: EdgeInsets.symmetric(vertical: r(6)),
+      padding: EdgeInsets.symmetric(horizontal: r(14), vertical: r(10)),
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.of(context).size.width * (context.isTablet ? 0.5 : 0.68),
+      ),
+      decoration: BoxDecoration(
+        color: mine ? secondary : Colors.black,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(r(14)),
+          topRight: Radius.circular(r(14)),
+          bottomLeft: Radius.circular(mine ? r(14) : 0),
+          bottomRight: Radius.circular(mine ? 0 : r(14)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            mine ? 'You' : senderName,
+            style: TextStyle(
+              fontSize: r(11),
+              fontWeight: FontWeight.w700,
+              color: mine ? Colors.black87 : Colors.white70,
+            ),
+          ),
+          SizedBox(height: r(3)),
+          Text(
+            (data['text'] ?? '').toString(),
+            style: TextStyle(
+              color: mine ? Colors.black : Colors.white,
+              fontSize: r(14.5),
+            ),
+          ),
+          if (time.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(top: r(5)),
+              child: Text(
+                time,
+                style: TextStyle(
+                  fontSize: r(11),
+                  color: mine ? Colors.black54 : Colors.white60,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    final avatar = Padding(
+      padding: EdgeInsets.only(
+        left: mine ? r(8) : 0,
+        right: mine ? 0 : r(8),
+        bottom: r(4),
+      ),
+      child: buildAvatar(avatarIndex, radius: r(13)),
+    );
+
+    return Row(
+      mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: mine ? [bubble, avatar] : [avatar, bubble],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (uid == null) return _noTrip();
 
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final secondary = scheme.secondary;
-    final bg = theme.scaffoldBackgroundColor;
+    final secondary = Theme.of(context).colorScheme.secondary;
     final r = context.rs;
 
     if (_effectiveTripId == null) {
@@ -201,10 +319,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     return StreamBuilder<DocumentSnapshot>(
-      stream: db
-          .collection('trips')
-          .doc(_effectiveTripId)
-          .snapshots(),
+      stream: db.collection('trips').doc(_effectiveTripId).snapshots(),
       builder: (context, tripSnap) {
         if (tripSnap.connectionState == ConnectionState.waiting) {
           return const Scaffold(
@@ -273,144 +388,216 @@ class _ChatScreenState extends State<ChatScreen> {
             _canChat = isOwner || isParticipant;
             if (!_canChat) return _noTrip();
 
+            if (!_profileLoaded) {
+              _ensureMyProfileLoaded();
+            }
+
+            final participantMeta = <String, Map<String, dynamic>>{};
+            for (final d in docs) {
+              final data = d.data() as Map<String, dynamic>;
+              final pid = data['userId']?.toString();
+              if (pid == null || pid.isEmpty) continue;
+              participantMeta[pid] = {
+                'name': data['name'] ?? 'User',
+                'avatar': normalizeAvatarIndex(data['avatar']),
+              };
+            }
+
+            final ownerId = tripData['ownerId']?.toString() ?? '';
+            if (ownerId.isNotEmpty && !participantMeta.containsKey(ownerId)) {
+              participantMeta[ownerId] = {
+                'name': tripData['ownerName'] ?? 'Host',
+                'avatar': normalizeAvatarIndex(tripData['ownerAvatar']),
+              };
+            }
+
+            final tripTitle = '${tripData['from'] ?? ''} -> ${tripData['to'] ?? ''}';
+
             return Scaffold(
-              backgroundColor: bg,
-              appBar: AppBar(
-                title: const Text('Trip Chat'),
-                elevation: 0,
-              ),
-              body: Column(
-                children: [
-                  Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: db
-                          .collection('tripMessages')
-                          .where('tripId', isEqualTo: _effectiveTripId)
-                          .snapshots(),
-                      builder: (_, snap) {
-                        if (snap.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-
-                        if (!snap.hasData || snap.data!.docs.isEmpty) {
-                          return Center(
-                            child: Text(
-                              'Start the conversation',
-                              style: theme.textTheme.bodyLarge,
+              backgroundColor: Colors.white,
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    Container(
+                      color: Colors.black,
+                      padding: EdgeInsets.fromLTRB(r(14), r(10), r(14), r(12)),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: r(34),
+                            height: r(34),
+                            decoration: BoxDecoration(
+                              color: secondary,
+                              shape: BoxShape.circle,
                             ),
-                          );
-                        }
-
-                        final docs = [...snap.data!.docs]
-                          ..sort((a, b) {
-                            final ta =
-                                (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-                            final tb =
-                                (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-                            final da = ta?.toDate();
-                            final dbb = tb?.toDate();
-                            if (da == null && dbb == null) return 0;
-                            if (da == null) return 1;
-                            if (dbb == null) return -1;
-                            return da.compareTo(dbb);
-                          });
-
-                        return ListView.builder(
-                          padding: EdgeInsets.symmetric(horizontal: r(8), vertical: r(12)),
-                          itemCount: docs.length,
-                          itemBuilder: (_, i) {
-                            final data = docs[i].data() as Map<String, dynamic>;
-                            final mine = data['senderId'] == uid;
-                            final timestamp = data['createdAt'] as Timestamp?;
-                            final time = timestamp != null
-                                ? DateFormat('HH:mm').format(timestamp.toDate())
-                                : '';
-
-                            return Align(
-                              alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                              child: Container(
-                                margin: EdgeInsets.symmetric(vertical: r(4)),
-                                padding: EdgeInsets.symmetric(horizontal: r(14), vertical: r(10)),
-                                constraints: BoxConstraints(
-                                  maxWidth: MediaQuery.of(context).size.width *
-                                      (context.isTablet ? 0.5 : 0.72),
-                                ),
-                                decoration: BoxDecoration(
-                                  color: mine ? secondary : Colors.grey[300],
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: Radius.circular(r(12)),
-                                    topRight: Radius.circular(r(12)),
-                                    bottomLeft: Radius.circular(mine ? r(12) : 0),
-                                    bottomRight: Radius.circular(mine ? 0 : r(12)),
+                            child: const Icon(Icons.chat, color: Colors.black, size: 20),
+                          ),
+                          SizedBox(width: r(10)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Trip Chat',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: r(16),
                                   ),
                                 ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      data['text'] ?? '',
-                                      style: TextStyle(
-                                        color: mine ? Colors.white : Colors.black87,
-                                        fontSize: r(15),
-                                      ),
-                                    ),
-                                    if (time.isNotEmpty)
-                                      Padding(
-                                        padding: EdgeInsets.only(top: r(4)),
-                                        child: Text(
-                                          time,
-                                          style: TextStyle(
-                                            fontSize: r(12),
-                                            color: mine ? Colors.white70 : Colors.black54,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
+                                Text(
+                                  tripTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: Colors.white70, fontSize: r(12)),
                                 ),
-                              ),
-                            );
-                          },
-                        );
-                      },
+                              ],
+                            ),
+                          ),
+                          Container(
+                            width: r(8),
+                            height: r(8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xff35d16f),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Container(
-                    color: Colors.white,
-                    padding: EdgeInsets.symmetric(horizontal: r(12), vertical: r(10)),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: controller,
-                            maxLines: null,
-                            decoration: InputDecoration(
-                              hintText: 'Message...',
-                              contentPadding:
-                                  EdgeInsets.symmetric(horizontal: r(16), vertical: r(10)),
-                              filled: true,
-                              fillColor: bg,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(r(25)),
-                                borderSide: BorderSide.none,
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: -80,
+                            top: 80,
+                            child: Container(
+                              width: 230,
+                              height: 230,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: secondary.withOpacity(0.08),
                               ),
                             ),
                           ),
-                        ),
-                        SizedBox(width: r(8)),
-                        Container(
-                          decoration: BoxDecoration(
-                            color: secondary,
-                            shape: BoxShape.circle,
+                          Positioned(
+                            right: -70,
+                            bottom: 120,
+                            child: Container(
+                              width: 200,
+                              height: 200,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.black.withOpacity(0.05),
+                              ),
+                            ),
                           ),
-                          child: IconButton(
-                            icon: Icon(Icons.send, color: scheme.onSecondary),
-                            onPressed: send,
+                          StreamBuilder<QuerySnapshot>(
+                            stream: db
+                                .collection('tripMessages')
+                                .where('tripId', isEqualTo: _effectiveTripId)
+                                .snapshots(),
+                            builder: (_, snap) {
+                              if (snap.connectionState == ConnectionState.waiting) {
+                                return const Center(child: CircularProgressIndicator());
+                              }
+
+                              if (!snap.hasData || snap.data!.docs.isEmpty) {
+                                return Center(
+                                  child: Text(
+                                    'Start the conversation',
+                                    style: TextStyle(color: Colors.grey[700], fontSize: r(15)),
+                                  ),
+                                );
+                              }
+
+                              final messageDocs = [...snap.data!.docs]
+                                ..sort((a, b) {
+                                  final ta =
+                                      (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+                                  final tb =
+                                      (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+                                  final da = ta?.toDate();
+                                  final dbb = tb?.toDate();
+                                  if (da == null && dbb == null) return 0;
+                                  if (da == null) return 1;
+                                  if (dbb == null) return -1;
+                                  return da.compareTo(dbb);
+                                });
+
+                              return ListView.builder(
+                                padding: EdgeInsets.symmetric(horizontal: r(12), vertical: r(12)),
+                                itemCount: messageDocs.length,
+                                itemBuilder: (_, i) {
+                                  final data = messageDocs[i].data() as Map<String, dynamic>;
+                                  final mine = data['senderId'] == uid;
+
+                                  return _buildMessageItem(
+                                    data: data,
+                                    participantMeta: participantMeta,
+                                    mine: mine,
+                                    secondary: secondary,
+                                  );
+                                },
+                              );
+                            },
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    Container(
+                      color: Colors.white,
+                      padding: EdgeInsets.fromLTRB(r(12), r(8), r(12), r(12)),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: secondary.withOpacity(0.22),
+                                borderRadius: BorderRadius.circular(r(30)),
+                                border: Border.all(
+                                  color: secondary.withOpacity(0.35),
+                                ),
+                              ),
+                              child: TextField(
+                                controller: controller,
+                                maxLines: null,
+                                style: const TextStyle(color: Colors.black87),
+                                textInputAction: TextInputAction.send,
+                                onSubmitted: (_) => send(),
+                                decoration: InputDecoration(
+                                  hintText: 'Send a message',
+                                  hintStyle: TextStyle(color: Colors.black54, fontSize: r(14)),
+                                  border: InputBorder.none,
+                                  contentPadding:
+                                      EdgeInsets.symmetric(horizontal: r(18), vertical: r(12)),
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: r(8)),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: secondary,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: secondary.withOpacity(0.3),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: IconButton(
+                              onPressed: send,
+                              icon: const Icon(Icons.send_rounded, color: Colors.black),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             );
           },
