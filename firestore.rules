@@ -50,8 +50,18 @@ service cloud.firestore {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
+          request.auth.token.admin == true
+          || request.auth.token.isAdmin == true
+          || request.auth.token.role == "admin"
+          || request.auth.token.role == "Admin"
+          || request.auth.token.role == "ADMIN"
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Admin"
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN"
           || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == "true"
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == true
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == "true"
         );
     }
 
@@ -99,6 +109,21 @@ service cloud.firestore {
       allow create: if signedIn() && 
                        request.resource.data.senderId == request.auth.uid;
       allow delete: if request.auth.uid == resource.data.senderId;
+    }
+
+    // Trip reviews: visible to signed-in users
+    match /tripReviews/{reviewId} {
+      allow read, list: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.reviewerId == uid();
+
+      allow update: if signedIn()
+        && resource.data.reviewerId == uid()
+        && request.resource.data.reviewerId == uid();
+
+      allow delete: if signedIn()
+        && (resource.data.reviewerId == uid() || isAdmin());
     }
 
     // Drivers: visible to all signed-in users, add/update/delete by admins only

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../utils/responsive.dart';
 import '../../../utils/transport_icons.dart';
 import 'trip_detail_screen.dart';
@@ -54,14 +55,25 @@ class MyTripsScreen extends StatelessWidget {
     );
   }
 
+  DateTime? _tripDateTime(Map<String, dynamic> data) {
+    final raw = data["dateTime"];
+    if (raw is Timestamp) return raw.toDate();
+    if (raw is DateTime) return raw;
+    return null;
+  }
+
+  String _formatTripDateTime(DateTime dt) {
+    return DateFormat("dd MMM yyyy, hh:mm a").format(dt);
+  }
+
   bool isActive(Map<String, dynamic> data) {
-    final dt = data["dateTime"]?.toDate();
+    final dt = _tripDateTime(data);
     if (dt == null) return false;
     return DateTime.now().isBefore(dt);
   }
 
   bool isPast(Map<String, dynamic> data) {
-    final dt = data["dateTime"]?.toDate();
+    final dt = _tripDateTime(data);
     if (dt == null) return false;
     return DateTime.now().isAfter(dt);
   }
@@ -75,6 +87,7 @@ class MyTripsScreen extends StatelessWidget {
     final secondary = theme.colorScheme.secondary;
     final r = context.rs;
     final tripIcon = destinationTransportIcon(data["to"]?.toString());
+    final tripDateTime = _tripDateTime(data);
 
     return InkWell(
       borderRadius: BorderRadius.circular(r(18)),
@@ -109,6 +122,15 @@ class MyTripsScreen extends StatelessWidget {
               "Host: ${data["ownerName"] ?? ""}",
               style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
             ),
+            if (tripDateTime != null) ...[
+              SizedBox(height: r(2)),
+              Text(
+                "Date & Time: ${_formatTripDateTime(tripDateTime)}",
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[700],
+                ),
+              ),
+            ],
           ],
         ),
       ),
