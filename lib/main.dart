@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
+import 'features/splash/screens/startup_splash_screen.dart';
 import 'providers/auth_provider.dart';
 import 'navigation/app_router.dart';
 
@@ -56,7 +57,9 @@ class WeGoVroomApp extends StatelessWidget {
         ),
       ),
 
-      home: const AppRouter(),
+      home: const StartupSplashScreen(
+        child: AppRouter(),
+      ),
     );
   }
 }

@@ -232,6 +232,114 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
   }
 
+  Map<String, dynamic> _reviewSummaryFromDocs(List<QueryDocumentSnapshot> docs) {
+    if (docs.isEmpty) {
+      return {
+        "count": 0,
+        "avg": 0.0,
+      };
+    }
+
+    double total = 0;
+    for (final doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      total += ((data["rating"] ?? 0) as num).toDouble();
+    }
+
+    return {
+      "count": docs.length,
+      "avg": total / docs.length,
+    };
+  }
+
+  Future<void> _openUserReviewsBottomSheet({
+    required String revieweeId,
+    required String revieweeName,
+  }) async {
+    if (!mounted) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.72,
+            child: StreamBuilder<QuerySnapshot>(
+              stream: db
+                  .collection("tripReviews")
+                  .where("revieweeId", isEqualTo: revieweeId)
+                  .snapshots(),
+              builder: (_, snap) {
+                final docs = List<QueryDocumentSnapshot>.from(
+                  snap.data?.docs ?? const [],
+                );
+                docs.sort((a, b) {
+                  final da = ((a.data() as Map<String, dynamic>)["createdAt"] as Timestamp?)
+                      ?.toDate();
+                  final dbb = ((b.data() as Map<String, dynamic>)["createdAt"] as Timestamp?)
+                      ?.toDate();
+                  if (da == null && dbb == null) return 0;
+                  if (da == null) return 1;
+                  if (dbb == null) return -1;
+                  return dbb.compareTo(da);
+                });
+
+                final summary = _reviewSummaryFromDocs(docs);
+                final reviewCount = summary["count"] as int;
+                final avgRating = (summary["avg"] as double);
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                      child: Text(
+                        "$revieweeName Reviews",
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        reviewCount == 0
+                            ? "No reviews yet"
+                            : "${avgRating.toStringAsFixed(1)}/5 from $reviewCount reviews",
+                        style: TextStyle(color: Colors.grey[700]),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: reviewCount == 0
+                          ? const Center(child: Text("No reviews yet"))
+                          : ListView.builder(
+                              itemCount: docs.length,
+                              itemBuilder: (_, i) {
+                                final review = docs[i].data() as Map<String, dynamic>;
+                                final reviewer = review["reviewerName"] ?? "User";
+                                final rating = review["rating"] ?? 0;
+                                final comment = (review["comment"] ?? "").toString();
+
+                                return ListTile(
+                                  title: Text("$reviewer - $rating/5"),
+                                  subtitle: comment.isEmpty ? null : Text(comment),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _participantsSection({
     required String ownerId,
     required bool allowReview,
@@ -296,12 +404,51 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     participantId != currentUserId;
 
                 return ListTile(
+                  onTap: participantId == null
+                      ? null
+                      : () => _openUserReviewsBottomSheet(
+                            revieweeId: participantId,
+                            revieweeName: name,
+                          ),
                   leading: const CircleAvatar(
                     backgroundColor: Color(0xffff7a00),
                     child: Icon(Icons.person, color: Colors.white),
                   ),
                   title: Text(name),
-                  subtitle: isHost ? const Text("Host") : null,
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (isHost) const Text("Host"),
+                      if (participantId != null)
+                        StreamBuilder<QuerySnapshot>(
+                          stream: db
+                              .collection("tripReviews")
+                              .where("revieweeId", isEqualTo: participantId)
+                              .snapshots(),
+                          builder: (_, reviewSnap) {
+                            final summary = _reviewSummaryFromDocs(
+                              List<QueryDocumentSnapshot>.from(
+                                reviewSnap.data?.docs ?? const [],
+                              ),
+                            );
+                            final reviewCount = summary["count"] as int;
+                            final avgRating = (summary["avg"] as double);
+
+                            if (reviewCount == 0) {
+                              return Text(
+                                "No reviews yet",
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                              );
+                            }
+
+                            return Text(
+                              "${avgRating.toStringAsFixed(1)}/5 from $reviewCount reviews",
+                              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
                   trailing: showReviewButton
                       ? TextButton(
                           onPressed: () => _openReviewDialog(
@@ -312,7 +459,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                           ),
                           child: const Text("Review"),
                         )
-                      : null,
+                      : const Text("View"),
                 );
               })
             ],
@@ -359,6 +506,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text("Reviews", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Text(
+                "Trip reviews (for this trip)",
+                style: TextStyle(color: Colors.grey[700], fontSize: 12),
+              ),
               const SizedBox(height: 12),
               ...docs.map((doc) {
                 final r = doc.data() as Map<String, dynamic>;
@@ -608,3 +760,4 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
   }
 }
+

@@ -13,11 +13,11 @@ class ProfileSetupScreen extends StatefulWidget {
 }
 
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
-  final nameController = TextEditingController(); // ⭐ NEW
+  final nameController = TextEditingController();
   final regController = TextEditingController();
   final phoneController = TextEditingController();
 
-  String gender = "Male";
+  String gender = 'Male';
   int avatarIndex = 0;
   bool loading = false;
 
@@ -31,16 +31,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
-    final doc = await FirebaseFirestore.instance.collection("users").doc(user.uid).get();
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final data = doc.data();
     if (data == null || !mounted) return;
 
     setState(() {
-      nameController.text = (data["displayName"] ?? "").toString();
-      regController.text = (data["register"] ?? "").toString();
-      phoneController.text = (data["phone"] ?? "").toString();
-      gender = (data["gender"] ?? "Male").toString();
-      avatarIndex = normalizeAvatarIndex(data["avatar"]);
+      nameController.text = (data['displayName'] ?? '').toString();
+      regController.text = (data['register'] ?? '').toString();
+      phoneController.text = (data['phone'] ?? '').toString();
+      gender = (data['gender'] ?? 'Male').toString();
+      avatarIndex = normalizeAvatarIndex(data['avatar']);
     });
   }
 
@@ -54,28 +54,36 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         regController.text.isEmpty ||
         phoneController.text.isEmpty) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Fill all fields")));
+          .showSnackBar(const SnackBar(content: Text('Fill all fields')));
       return;
     }
 
     setState(() => loading = true);
 
-    /// ⭐ SAVE PROFILE (WITH NAME)
-    await FirebaseFirestore.instance.collection("users").doc(user.uid).set({
-      "email": user.email,
-      "displayName": nameController.text, // ⭐ IMPORTANT
-      "register": regController.text,
-      "phone": phoneController.text,
-      "gender": gender,
-      "avatar": avatarIndex,
-      "createdAt": FieldValue.serverTimestamp(),
-    });
+    final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final existingDoc = await userRef.get();
+
+    final payload = <String, dynamic>{
+      'email': user.email,
+      'displayName': nameController.text,
+      'register': regController.text,
+      'phone': phoneController.text,
+      'gender': gender,
+      'avatar': avatarIndex,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (!existingDoc.exists) {
+      payload['createdAt'] = FieldValue.serverTimestamp();
+    }
+
+    await userRef.set(payload, SetOptions(merge: true));
 
     auth.refresh();
 
     if (!mounted) return;
 
-    Navigator.of(context).pushNamedAndRemoveUntil("/", (_) => false);
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
   }
 
   @override
@@ -105,18 +113,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       icon: const Icon(Icons.arrow_back),
                     ),
                   ),
-
                 const Text(
-                  "Complete Your Profile",
+                  'Complete Your Profile',
                   style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(height: 24),
-
-                /// AVATAR GRID
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -127,8 +131,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: 10,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 5,
                       crossAxisSpacing: 12,
                       mainAxisSpacing: 12,
@@ -143,10 +146,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     },
                   ),
                 ),
-
                 const SizedBox(height: 20),
-
-                /// FORM CARD
                 Container(
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
@@ -155,61 +155,48 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   ),
                   child: Column(
                     children: [
-                      /// ⭐ NAME FIELD (NEW)
                       TextField(
                         controller: nameController,
                         decoration: const InputDecoration(
-                          labelText: "Full Name",
+                          labelText: 'Full Name',
                           prefixIcon: Icon(Icons.person),
                         ),
                       ),
-
                       const SizedBox(height: 16),
-
                       TextField(
                         controller: regController,
                         decoration: const InputDecoration(
-                          labelText: "Register number",
+                          labelText: 'Register number',
                           prefixIcon: Icon(Icons.badge_outlined),
                         ),
                       ),
-
                       const SizedBox(height: 16),
-
                       DropdownButtonFormField(
                         value: gender,
                         decoration: const InputDecoration(
-                          labelText: "Gender",
+                          labelText: 'Gender',
                           prefixIcon: Icon(Icons.wc),
                         ),
                         items: const [
-                          DropdownMenuItem(
-                              value: "Male", child: Text("Male")),
-                          DropdownMenuItem(
-                              value: "Female", child: Text("Female")),
-                          DropdownMenuItem(
-                              value: "Other", child: Text("Other")),
+                          DropdownMenuItem(value: 'Male', child: Text('Male')),
+                          DropdownMenuItem(value: 'Female', child: Text('Female')),
+                          DropdownMenuItem(value: 'Other', child: Text('Other')),
                         ],
                         onChanged: (v) => setState(() => gender = v.toString()),
                       ),
-
                       const SizedBox(height: 16),
-
                       TextField(
                         controller: phoneController,
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(
-                          labelText: "Phone number",
+                          labelText: 'Phone number',
                           prefixIcon: Icon(Icons.phone),
                         ),
                       ),
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 28),
-
-                /// BUTTON
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -227,10 +214,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         onTap: loading ? null : completeProfile,
                         child: Center(
                           child: loading
-                              ? const CircularProgressIndicator(
-                                  color: Colors.white)
+                              ? const CircularProgressIndicator(color: Colors.white)
                               : const Text(
-                                  "Complete Setup",
+                                  'Complete Setup',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
@@ -241,7 +227,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
               ],
             ),
