@@ -128,6 +128,17 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
+    DateTime? tripStart;
+    try {
+      tripStart = (trip["dateTime"] as Timestamp?)?.toDate();
+    } catch (_) {}
+    if (tripStart != null && !DateTime.now().isBefore(tripStart)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Join time has ended for this trip")),
+      );
+      return;
+    }
+
     final isPublicTrip = trip["isPublic"] != false;
     final invitedIds = ((trip["invitedUserIds"] as List?) ?? const [])
         .map((e) => e.toString())
@@ -170,6 +181,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         final snap = await tx.get(ref);
 
         final data = snap.data()!;
+        DateTime? startTime;
+        try {
+          startTime = (data["dateTime"] as Timestamp?)?.toDate();
+        } catch (_) {}
+        if (startTime != null && !DateTime.now().isBefore(startTime)) {
+          throw Exception("Join time ended");
+        }
+        if (data["completed"] == true) {
+          throw Exception("Trip already completed");
+        }
         final joined = data["joined"] ?? 1;
         final max = data["maxPeople"] ?? 4;
 
@@ -1107,6 +1128,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             : false;
         final completed = d["completed"] == true;
         final tripEnded = completed || autoEnded;
+        final joinWindowClosed = dt != null ? !DateTime.now().isBefore(dt) : false;
         final isPublicTrip = d["isPublic"] != false;
         final invitedIds = ((d["invitedUserIds"] as List?) ?? const [])
             .map((e) => e.toString())
@@ -1331,13 +1353,18 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                               borderRadius: BorderRadius.circular(30),
                             ),
                           ),
-                          onPressed: (loading || seatsLeft <= 0 || !canJoinByInvite)
+                          onPressed: (loading ||
+                                  seatsLeft <= 0 ||
+                                  !canJoinByInvite ||
+                                  joinWindowClosed)
                               ? null
                               : () => handleJoin(d),
                           child: loading
                               ? const CircularProgressIndicator(color: Colors.white)
                               : Text(
-                                  canJoinByInvite ? "Join Trip" : "Invite Only",
+                                  joinWindowClosed
+                                      ? "Join Closed"
+                                      : (canJoinByInvite ? "Join Trip" : "Invite Only"),
                                   style: const TextStyle(
                                     color: Colors.black,
                                     fontWeight: FontWeight.bold,
