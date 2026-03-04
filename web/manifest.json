@@ -1,6 +1,6 @@
 {
-    "name": "wegovroom",
-    "short_name": "wegovroom",
+    "name": "WeGoVroom",
+    "short_name": "WeGoVroom",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
