@@ -31,6 +31,9 @@ service cloud.firestore {
 
     function canSelfJoinTrip(tripId) {
       return tripExists(tripId)
+        && tripData(tripId).completed != true
+        && tripData(tripId).dateTime is timestamp
+        && request.time < tripData(tripId).dateTime
         && (
           tripData(tripId).isPublic != false
           || tripOwnerId(tripId) == uid()
