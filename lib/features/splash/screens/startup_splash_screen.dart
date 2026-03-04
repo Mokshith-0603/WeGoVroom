@@ -46,39 +46,24 @@ class _StartupSplashScreenState extends State<StartupSplashScreen> {
               ),
             );
           },
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(44),
-                child: Image.asset(
-                  'web/icons/Icon-512.png',
-                  width: 260,
-                  height: 260,
-                  fit: BoxFit.contain,
-                ),
+          child: RichText(
+            text: const TextSpan(
+              style: TextStyle(
+                fontSize: 34,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
               ),
-              const SizedBox(height: 14),
-              RichText(
-                text: const TextSpan(
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: 'WeGo',
-                      style: TextStyle(color: Color(0xff10111a)),
-                    ),
-                    TextSpan(
-                      text: 'Vroom',
-                      style: TextStyle(color: Color(0xffff7a00)),
-                    ),
-                  ],
+              children: [
+                TextSpan(
+                  text: 'WeGo',
+                  style: TextStyle(color: Color(0xff10111a)),
                 ),
-              ),
-            ],
+                TextSpan(
+                  text: 'Vroom',
+                  style: TextStyle(color: Color(0xffff7a00)),
+                ),
+              ],
+            ),
           ),
         ),
       ),
