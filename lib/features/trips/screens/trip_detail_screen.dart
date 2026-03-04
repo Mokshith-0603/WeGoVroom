@@ -66,7 +66,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       } catch (_) {
         continue;
       }
-      if (dt.isAfter(now)) return true;
+      final completed = data["completed"] == true;
+      if (!completed && now.isBefore(dt.add(const Duration(hours: 12)))) return true;
     }
     return false;
   }
@@ -892,8 +893,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           dt = d["dateTime"]?.toDate();
         } catch (_) {}
 
-        final expired = dt != null ? DateTime.now().isAfter(dt) : false;
+        final autoEnded = dt != null
+            ? !DateTime.now().isBefore(dt.add(const Duration(hours: 12)))
+            : false;
         final completed = d["completed"] == true;
+        final tripEnded = completed || autoEnded;
         final isPublicTrip = d["isPublic"] != false;
         final invitedIds = ((d["invitedUserIds"] as List?) ?? const [])
             .map((e) => e.toString())
@@ -908,7 +912,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 user.uid == d["ownerId"] ||
                 invitedIds.contains(user.uid) ||
                 isEmailInvited);
-        final allowReview = completed;
+        final allowReview = tripEnded;
         final dateText = dt != null ? "${dt.day}/${dt.month}/${dt.year}" : "";
         final timeText = dt != null ? TimeOfDay.fromDateTime(dt).format(context) : "";
 
@@ -940,7 +944,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                           ),
                         ),
                         const Spacer(),
-                        if (isCreator && !completed && !expired)
+                        if (isCreator && !tripEnded)
                           IconButton(
                             icon: const Icon(Icons.edit, color: Color(0xffff7a00)),
                             onPressed: () => _openEditTripDialog(d),
@@ -1017,6 +1021,29 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    if (isCreator && !tripEnded)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          "Disclaimer: If you don't complete this trip manually, it will be completed automatically 12 hours after the selected trip time.",
+                          style: TextStyle(
+                            color: Colors.grey[700],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    if (autoEnded && !completed)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Text(
+                          "This trip has reached 12 hours after the selected time and is treated as completed.",
+                          style: TextStyle(
+                            color: Colors.grey[700],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
                     _participantsSection(
                       ownerId: d["ownerId"],
                       allowReview: allowReview,
@@ -1032,7 +1059,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             ],
           ),
           bottomNavigationBar: (() {
-            if (isCreator && !expired) {
+            if (isCreator && !tripEnded) {
               return Padding(
                 padding: const EdgeInsets.all(16),
                 child: SizedBox(
@@ -1046,8 +1073,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     ),
                     onPressed: () async {
                       await db.collection("trips").doc(widget.tripId).update({
-                        "dateTime": FieldValue.serverTimestamp(),
                         "completed": true,
+                        "completedAt": FieldValue.serverTimestamp(),
                       });
                     },
                     child: const Text(
@@ -1062,7 +1089,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               );
             }
 
-            if (!isCreator && !expired) {
+            if (!isCreator && !tripEnded) {
               return Padding(
                 padding: const EdgeInsets.all(16),
                 child: SizedBox(
