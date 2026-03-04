@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/auth_provider.dart';
+import '../../auth/screens/landing_screen.dart';
 import '../widgets/avatar_utils.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
@@ -88,8 +89,6 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canGoBack = Navigator.of(context).canPop();
-
     return Scaffold(
       body: Container(
         padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -105,14 +104,21 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 20),
-                if (canGoBack)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back),
-                    ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    onPressed: () async {
+                      await context.read<AuthProvider>().logout();
+                      if (!context.mounted) return;
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LandingScreen()),
+                        (_) => false,
+                      );
+                    },
+                    icon: const Icon(Icons.arrow_back),
                   ),
+                ),
                 const Text(
                   'Complete Your Profile',
                   style: TextStyle(

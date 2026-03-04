@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../utils/responsive.dart';
 import 'landing_screen.dart';
-import '../../profile/screens/profile_setup_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -43,9 +42,26 @@ class _SignupScreenState extends State<SignupScreen> {
 
     if (!mounted) return;
 
+    await showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Verify your email"),
+        content: const Text(
+          "A confirmation mail has been sent to your email. Check your spam mail for verification, then sign in to continue profile setup.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const ProfileSetupScreen()),
+      MaterialPageRoute(builder: (_) => const LandingScreen()),
     );
   }
 
