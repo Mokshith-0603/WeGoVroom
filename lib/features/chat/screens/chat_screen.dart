@@ -56,7 +56,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (tripData['completed'] == true) return false;
     final dt = _tripDateTime(tripData);
     if (dt == null) return false;
-    return dt.isAfter(DateTime.now());
+    return DateTime.now().isBefore(dt.add(const Duration(hours: 12)));
   }
 
   int _tripSortScore(Map<String, dynamic> tripData) {

@@ -69,8 +69,12 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         .where("ownerId", isEqualTo: uid)
         .get();
     for (final t in ownSnap.docs) {
-      final dt = t.data()["dateTime"]?.toDate();
-      if (dt != null && dt.isAfter(now)) return true;
+      final data = t.data();
+      final dt = data["dateTime"]?.toDate();
+      final completed = data["completed"] == true;
+      if (dt != null && !completed && now.isBefore(dt.add(const Duration(hours: 12)))) {
+        return true;
+      }
     }
 
     final parts = await db
@@ -99,7 +103,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         continue;
       }
 
-      if (dt.isAfter(now)) {
+      final completed = data["completed"] == true;
+      if (!completed && now.isBefore(dt.add(const Duration(hours: 12)))) {
         return true; // active future trip exists
       }
     }

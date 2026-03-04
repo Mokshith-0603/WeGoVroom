@@ -37,8 +37,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final ownSnap = await db.collection("trips").where("ownerId", isEqualTo: uid).get();
     for (final t in ownSnap.docs) {
-      final dt = t.data()["dateTime"]?.toDate();
-      if (dt != null && dt.isAfter(now)) return true;
+      final data = t.data();
+      final dt = data["dateTime"]?.toDate();
+      final completed = data["completed"] == true;
+      if (dt != null && !completed && now.isBefore(dt.add(const Duration(hours: 12)))) {
+        return true;
+      }
     }
 
     final parts = await db.collection("tripParticipants").where("userId", isEqualTo: uid).get();
@@ -52,7 +56,8 @@ class _HomeScreenState extends State<HomeScreen> {
       final data = tripDoc.data()!;
       final dt = data["dateTime"]?.toDate();
 
-      if (dt != null && dt.isAfter(now)) {
+      final completed = data["completed"] == true;
+      if (dt != null && !completed && now.isBefore(dt.add(const Duration(hours: 12)))) {
         return true;
       }
     }
@@ -251,7 +256,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       final data = doc.data() as Map<String, dynamic>;
                       final dt = data["dateTime"]?.toDate();
                       if (dt == null) return false;
-                      if (!dt.isAfter(now)) return false;
+                      final completed = data["completed"] == true;
+                      if (completed) return false;
+                      if (!now.isBefore(dt.add(const Duration(hours: 12)))) return false;
 
                       final isPublicTrip = data["isPublic"] != false;
                       if (isPublicTrip) return true;

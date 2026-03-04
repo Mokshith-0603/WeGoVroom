@@ -35,11 +35,17 @@ class ProfileDrawer extends StatelessWidget {
 
     final db = FirebaseFirestore.instance;
     final completedTripIds = <String>{};
+    final now = DateTime.now();
 
     final ownedSnap = await db.collection('trips').where('ownerId', isEqualTo: uid).get();
     for (final doc in ownedSnap.docs) {
       final data = doc.data();
-      if (data['completed'] == true) {
+      DateTime? dt;
+      try {
+        dt = (data['dateTime'] as Timestamp?)?.toDate();
+      } catch (_) {}
+      final autoEnded = dt != null && !now.isBefore(dt.add(const Duration(hours: 12)));
+      if (data['completed'] == true || autoEnded) {
         completedTripIds.add(doc.id);
       }
     }
@@ -53,7 +59,12 @@ class ProfileDrawer extends StatelessWidget {
       final tripDoc = await db.collection('trips').doc(tripId).get();
       if (!tripDoc.exists) continue;
       final tripData = tripDoc.data() ?? {};
-      if (tripData['completed'] == true) {
+      DateTime? dt;
+      try {
+        dt = (tripData['dateTime'] as Timestamp?)?.toDate();
+      } catch (_) {}
+      final autoEnded = dt != null && !now.isBefore(dt.add(const Duration(hours: 12)));
+      if (tripData['completed'] == true || autoEnded) {
         completedTripIds.add(tripId);
       }
     }

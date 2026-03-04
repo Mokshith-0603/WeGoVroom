@@ -67,15 +67,17 @@ class MyTripsScreen extends StatelessWidget {
   }
 
   bool isActive(Map<String, dynamic> data) {
+    if (data["completed"] == true) return false;
     final dt = _tripDateTime(data);
     if (dt == null) return false;
-    return DateTime.now().isBefore(dt);
+    return DateTime.now().isBefore(dt.add(const Duration(hours: 12)));
   }
 
   bool isPast(Map<String, dynamic> data) {
+    if (data["completed"] == true) return true;
     final dt = _tripDateTime(data);
     if (dt == null) return false;
-    return DateTime.now().isAfter(dt);
+    return !DateTime.now().isBefore(dt.add(const Duration(hours: 12)));
   }
 
   Widget _card(

@@ -56,7 +56,9 @@ class _MainNavigationState extends State<MainNavigation> {
             if (ts == null) continue;
 
             DateTime dt = ts.toDate();
-            if (dt.isAfter(now)) {
+            final data = tripDoc.data() ?? const <String, dynamic>{};
+            final completed = data["completed"] == true;
+            if (!completed && now.isBefore(dt.add(const Duration(hours: 12)))) {
               lastKnownTripId = tid;
               return tid; // First active trip found
             }
@@ -82,10 +84,13 @@ class _MainNavigationState extends State<MainNavigation> {
             DateTime? bestDate;
 
             for (final doc in ownedSnap.docs) {
-              final ts = doc.data()["dateTime"];
+              final data = doc.data();
+              if (data["completed"] == true) continue;
+              final ts = data["dateTime"];
               if (ts == null) continue;
               try {
                 final dt = ts.toDate();
+                if (!now.isBefore(dt.add(const Duration(hours: 12)))) continue;
                 if (bestDate == null || dt.isAfter(bestDate)) {
                   bestDate = dt;
                   bestDoc = doc;
