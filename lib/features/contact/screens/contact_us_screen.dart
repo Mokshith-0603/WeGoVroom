@@ -1,17 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ContactUsScreen extends StatelessWidget {
   const ContactUsScreen({super.key});
 
   static const String _instagramId = '@wegovroom_.official';
-  static const String _instagramUrl =
-      'https://www.instagram.com/wegovroom_.official?igsh=d2pobmF1bzJqa2hl';
+  static const String _instagramHandle = 'wegovroom_.official';
+  static final Uri _instagramWebUri =
+      Uri.parse('https://www.instagram.com/wegovroom_.official?igsh=d2pobmF1bzJqa2hl');
+  static final Uri _instagramAppUri =
+      Uri.parse('instagram://user?username=$_instagramHandle');
 
   Future<void> _openInstagram(BuildContext context) async {
-    final uri = Uri.parse(_instagramUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!kIsWeb) {
+      final openedApp = await launchUrl(
+        _instagramAppUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (openedApp) return;
+    }
+
+    final openedWeb = await launchUrl(
+      _instagramWebUri,
+      mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+    );
+    if (openedWeb) {
       return;
     }
 
