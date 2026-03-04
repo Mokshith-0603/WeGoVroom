@@ -18,6 +18,183 @@ class _DriversScreenState extends State<DriversScreen> {
   bool _isAdminUser = false;
   bool _adminLoaded = false;
 
+  Future<String> _currentReviewerName() async {
+    final user = _auth.currentUser;
+    if (user == null) return 'User';
+    try {
+      final doc = await _db.collection('users').doc(user.uid).get();
+      final data = doc.data() ?? const <String, dynamic>{};
+      final name = (data['displayName'] ?? data['name'] ?? '').toString().trim();
+      if (name.isNotEmpty) return name;
+    } catch (_) {}
+    return user.email?.split('@').first ?? 'User';
+  }
+
+  Future<void> _openDriverReviewsBottomSheet({
+    required String driverId,
+    required String driverName,
+  }) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) {
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height * 0.72,
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _db.collection('driverReviews').where('driverId', isEqualTo: driverId).snapshots(),
+              builder: (_, snap) {
+                final docs = List<QueryDocumentSnapshot>.from(snap.data?.docs ?? const []);
+                docs.sort((a, b) {
+                  final ta = ((a.data() as Map<String, dynamic>)['updatedAt'] as Timestamp?)?.toDate();
+                  final tb = ((b.data() as Map<String, dynamic>)['updatedAt'] as Timestamp?)?.toDate();
+                  if (ta == null && tb == null) return 0;
+                  if (ta == null) return 1;
+                  if (tb == null) return -1;
+                  return tb.compareTo(ta);
+                });
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                      child: Text(
+                        '$driverName Reviews',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    Expanded(
+                      child: docs.isEmpty
+                          ? const Center(child: Text('No reviews yet'))
+                          : ListView.builder(
+                              itemCount: docs.length,
+                              itemBuilder: (_, i) {
+                                final data = docs[i].data() as Map<String, dynamic>;
+                                final reviewerName = (data['reviewerName'] ?? '').toString().trim();
+                                final reviewerId = (data['userId'] ?? '').toString();
+                                final rating = ((data['rating'] ?? 0) as num).toDouble();
+                                final comment = (data['comment'] ?? '').toString();
+                                return ListTile(
+                                  leading: const Icon(Icons.person_outline),
+                                  title: reviewerName.isNotEmpty
+                                      ? Text('$reviewerName - ${rating.toStringAsFixed(1)}/5')
+                                      : FutureBuilder<DocumentSnapshot>(
+                                          future: reviewerId.isEmpty
+                                              ? Future.value(null)
+                                              : _db.collection('users').doc(reviewerId).get(),
+                                          builder: (_, userSnap) {
+                                            final userData = userSnap.data?.data()
+                                                as Map<String, dynamic>?;
+                                            final resolvedName = (userData?['displayName'] ??
+                                                    userData?['name'] ??
+                                                    reviewerId)
+                                                .toString();
+                                            return Text(
+                                              '$resolvedName - ${rating.toStringAsFixed(1)}/5',
+                                            );
+                                          },
+                                        ),
+                                  subtitle: comment.trim().isEmpty ? const Text('No comment') : Text(comment),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openDriverReviewDialog({
+    required String driverId,
+    required String driverName,
+    double? initialRating,
+    String? initialComment,
+  }) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+
+    final commentController = TextEditingController(text: initialComment ?? '');
+    double rating = (initialRating ?? 5).clamp(1, 5).toDouble();
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Rate $driverName'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Rating: ${rating.toStringAsFixed(1)}/5'),
+                  Slider(
+                    value: rating,
+                    min: 1,
+                    max: 5,
+                    divisions: 8,
+                    label: rating.toStringAsFixed(1),
+                    onChanged: (v) => setDialogState(() => rating = v),
+                  ),
+                  TextField(
+                    controller: commentController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Write your review (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    try {
+                      final reviewerName = await _currentReviewerName();
+                      final reviewId = '${driverId}_$uid';
+                      await _db.collection('driverReviews').doc(reviewId).set({
+                        'driverId': driverId,
+                        'userId': uid,
+                        'reviewerName': reviewerName,
+                        'rating': rating,
+                        'comment': commentController.text.trim(),
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      }, SetOptions(merge: true));
+                      if (!mounted) return;
+                      Navigator.pop(dialogContext);
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        const SnackBar(content: Text('Review saved')),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        SnackBar(content: Text('Failed to save review: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -288,8 +465,9 @@ class _DriversScreenState extends State<DriversScreen> {
     final name = d['name'] ?? 'Driver';
     final phone = d['phone'] ?? '';
     final vehicle = d['vehicle'] ?? '';
-    final rating = (d['rating'] ?? 4.5).toString();
+    final fallbackRating = ((d['rating'] ?? 4.5) as num).toDouble();
     final vehicleIcon = vehicleTransportIcon(vehicle.toString());
+    final uid = _auth.currentUser?.uid;
 
     final theme = Theme.of(context);
     final secondary = theme.colorScheme.secondary;
@@ -327,11 +505,77 @@ class _DriversScreenState extends State<DriversScreen> {
                   style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[800]),
                 ),
                 SizedBox(height: r(4)),
-                Row(
-                  children: [
-                    Icon(Icons.star, size: r(16), color: secondary),
-                    Text(rating),
-                  ],
+                StreamBuilder<QuerySnapshot>(
+                  stream: _db
+                      .collection('driverReviews')
+                      .where('driverId', isEqualTo: driverId)
+                      .snapshots(),
+                  builder: (_, snap) {
+                    final docs = snap.data?.docs ?? const [];
+
+                    double avg = fallbackRating;
+                    int count = 0;
+                    double? myRating;
+                    String myComment = '';
+
+                    if (docs.isNotEmpty) {
+                      double total = 0;
+                      for (final doc in docs) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final ratingValue = ((data['rating'] ?? 0) as num).toDouble();
+                        total += ratingValue;
+                        if (uid != null && data['userId'] == uid) {
+                          myRating = ratingValue;
+                          myComment = (data['comment'] ?? '').toString();
+                        }
+                      }
+                      count = docs.length;
+                      avg = total / count;
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.star, size: r(16), color: secondary),
+                            Text('${avg.toStringAsFixed(1)} (${count > 0 ? count : '0'} reviews)'),
+                          ],
+                        ),
+                        SizedBox(height: r(6)),
+                        TextButton.icon(
+                          onPressed: () => _openDriverReviewsBottomSheet(
+                            driverId: driverId,
+                            driverName: name.toString(),
+                          ),
+                          icon: const Icon(Icons.visibility_outlined),
+                          label: const Text('View Reviews'),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size(0, r(28)),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: uid == null
+                              ? null
+                              : () => _openDriverReviewDialog(
+                                    driverId: driverId,
+                                    driverName: name.toString(),
+                                    initialRating: myRating,
+                                    initialComment: myComment,
+                                  ),
+                          icon: const Icon(Icons.rate_review_outlined),
+                          label: Text(myRating == null ? 'Rate/Review' : 'Edit Review'),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size(0, r(28)),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ],
             ),

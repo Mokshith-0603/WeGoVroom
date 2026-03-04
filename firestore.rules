@@ -76,7 +76,7 @@ service cloud.firestore {
     }
 
     function isTripEventType(t) {
-      return t is string && (t == "trip_joined" || t == "trip_left");
+      return t is string && (t == "trip_joined" || t == "trip_left" || t == "trip_removed");
     }
 
     function canCreateTripEventNotification() {
@@ -89,7 +89,16 @@ service cloud.firestore {
         && isTripEventType(request.resource.data.type)
         && request.resource.data.actorId == uid()
         && tripExists(request.resource.data.tripId)
-        && request.resource.data.userId == tripOwnerId(request.resource.data.tripId);
+        && (
+          // participant notifies host (join/leave)
+          request.resource.data.userId == tripOwnerId(request.resource.data.tripId)
+          // host notifies participant (removed)
+          || (
+            request.resource.data.type == "trip_removed"
+            && uid() == tripOwnerId(request.resource.data.tripId)
+            && request.resource.data.userId != uid()
+          )
+        );
     }
 
     // User profiles
@@ -167,6 +176,50 @@ service cloud.firestore {
     match /drivers/{driverId} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();
+    }
+
+    // Host removal logs from trip participants
+    match /tripKickLogs/{logId} {
+      allow create: if signedIn()
+        && request.resource.data.tripId is string
+        && request.resource.data.userId is string
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && tripExists(request.resource.data.tripId)
+        && uid() == tripOwnerId(request.resource.data.tripId);
+      allow read: if signedIn() && (
+        isAdmin()
+        || uid() == resource.data.userId
+        || uid() == tripOwnerId(resource.data.tripId)
+      );
+      allow update, delete: if false;
+    }
+
+    // Driver reviews: any signed-in user can review, users can edit only their own review
+    match /driverReviews/{reviewId} {
+      allow read, list: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.userId == uid()
+        && request.resource.data.driverId is string
+        && reviewId == (request.resource.data.driverId + "_" + uid())
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment is string;
+
+      allow update: if signedIn()
+        && resource.data.userId == uid()
+        && request.resource.data.userId == uid()
+        && request.resource.data.driverId == resource.data.driverId
+        && reviewId == (resource.data.driverId + "_" + uid())
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment is string;
+
+      allow delete: if signedIn()
+        && (resource.data.userId == uid() || isAdmin());
     }
 
     // Notifications
