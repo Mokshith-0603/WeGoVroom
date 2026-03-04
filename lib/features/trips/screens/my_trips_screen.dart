@@ -235,41 +235,88 @@ class MyTripsScreen extends StatelessWidget {
 
   Widget _history(String uid, BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection("trips").snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection("tripParticipants")
+          .where("userId", isEqualTo: uid)
+          .snapshots(),
       builder: (_, snap) {
         if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final participantDocs = snap.data!.docs;
 
-        final pastDocs = snap.data!.docs
-            .where((e) => e.exists && e.data() != null)
-            .where((e) => isPast(e.data() as Map<String, dynamic>))
-            .toList();
+        return FutureBuilder<List<DocumentSnapshot>>(
+          future: _fetchHistoryTrips(uid, participantDocs),
+          builder: (_, historySnap) {
+            if (!historySnap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-        if (pastDocs.isEmpty) {
-          return const Center(child: Text("No trip history"));
-        }
+            final historyDocs = historySnap.data!;
+            if (historyDocs.isEmpty) {
+              return const Center(child: Text("No trip history"));
+            }
 
-        return ListView(
-          children: pastDocs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return _card(
-              context,
-              data,
-              onTap: () {
-                Navigator.push(
+            return ListView(
+              children: historyDocs.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return _card(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => TripDetailScreen(
-                      tripId: doc.id,
-                      data: data,
-                    ),
-                  ),
+                  data,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => TripDetailScreen(
+                          tripId: doc.id,
+                          data: data,
+                        ),
+                      ),
+                    );
+                  },
                 );
-              },
+              }).toList(),
             );
-          }).toList(),
+          },
         );
       },
     );
+  }
+
+  Future<List<DocumentSnapshot>> _fetchHistoryTrips(
+    String uid,
+    List<QueryDocumentSnapshot> participantDocs,
+  ) async {
+    final db = FirebaseFirestore.instance;
+    final ownerTripsFuture = db.collection("trips").where("ownerId", isEqualTo: uid).get();
+    final joinedTripsFuture = _fetchTrips(participantDocs);
+
+    final ownerTrips = await ownerTripsFuture;
+    final joinedTrips = await joinedTripsFuture;
+
+    final byId = <String, DocumentSnapshot>{};
+    for (final doc in ownerTrips.docs) {
+      byId[doc.id] = doc;
+    }
+    for (final doc in joinedTrips) {
+      byId[doc.id] = doc;
+    }
+
+    final filtered = byId.values.where((doc) {
+      if (!doc.exists || doc.data() == null) return false;
+      final data = doc.data() as Map<String, dynamic>;
+      final completed = data["completed"] == true;
+      return completed || isPast(data);
+    }).toList();
+
+    filtered.sort((a, b) {
+      final ad = _tripDateTime(a.data() as Map<String, dynamic>);
+      final bd = _tripDateTime(b.data() as Map<String, dynamic>);
+      if (ad == null && bd == null) return 0;
+      if (ad == null) return 1;
+      if (bd == null) return -1;
+      return bd.compareTo(ad);
+    });
+
+    return filtered;
   }
 
   Future<List<DocumentSnapshot>> _fetchTrips(List<QueryDocumentSnapshot> source) async {

@@ -19,6 +19,7 @@ class TripDetailScreen extends StatefulWidget {
 
 class _TripDetailScreenState extends State<TripDetailScreen> {
   final db = FirebaseFirestore.instance;
+  final List<int> _maxPeopleOptions = [2, 3, 4, 5, 6];
 
   bool loading = false;
   bool joinedAlready = false;
@@ -148,9 +149,334 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     setState(() => loading = false);
   }
 
+  Future<void> _openLeaveTripDialog(Map<String, dynamic> trip) async {
+    final reasonController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text("Leave Trip"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Please tell why you want to leave this trip."),
+              const SizedBox(height: 10),
+              TextField(
+                controller: reasonController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: "Your reason",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final reason = reasonController.text.trim();
+                if (reason.isEmpty) {
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(content: Text("Please provide a reason to leave")),
+                  );
+                  return;
+                }
+
+                Navigator.pop(dialogContext);
+                await _leaveTrip(trip, reason);
+              },
+              child: const Text("Leave"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _leaveTrip(Map<String, dynamic> trip, String reason) async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) return;
+
+    setState(() => loading = true);
+    try {
+      final participantSnap = await db
+          .collection("tripParticipants")
+          .where("tripId", isEqualTo: widget.tripId)
+          .where("userId", isEqualTo: user.uid)
+          .limit(1)
+          .get();
+
+      if (participantSnap.docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("You are not part of this trip")),
+          );
+        }
+        setState(() => loading = false);
+        return;
+      }
+
+      final participantDoc = participantSnap.docs.first;
+      final participantData = participantDoc.data();
+      final userName = (participantData["name"] ?? "User").toString();
+
+      await db.runTransaction((tx) async {
+        final tripRef = db.collection("trips").doc(widget.tripId);
+        final tripSnap = await tx.get(tripRef);
+        final tripData = tripSnap.data() ?? const <String, dynamic>{};
+        final joined = (tripData["joined"] as num?)?.toInt() ?? 1;
+        final nextJoined = (joined - 1) < 1 ? 1 : (joined - 1);
+
+        tx.delete(participantDoc.reference);
+        tx.update(tripRef, {"joined": nextJoined});
+      });
+
+      try {
+        await db.collection("tripLeaveLogs").add({
+          "tripId": widget.tripId,
+          "userId": user.uid,
+          "userName": userName,
+          "reason": reason,
+          "leftAt": FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+
+      try {
+        // Visible to host/participants via regular chat stream.
+        await db.collection("tripMessages").add({
+          "tripId": widget.tripId,
+          "senderId": user.uid,
+          "senderName": userName,
+          "senderAvatar": participantData["avatar"] ?? 0,
+          "text": "$userName left the trip. Reason: $reason",
+          "createdAt": FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+
+      try {
+        await db.collection("notifications").add({
+          "userId": trip["ownerId"],
+          "message": "$userName left your trip. Reason: $reason",
+          "createdAt": FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+
+      if (mounted) {
+        setState(() => joinedAlready = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("You have left the trip")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to leave trip: $e")),
+        );
+      }
+    }
+
+    if (mounted) {
+      setState(() => loading = false);
+    }
+  }
+
   Future<void> deleteTrip() async {
     await db.collection("trips").doc(widget.tripId).delete();
     if (mounted) Navigator.pop(context);
+  }
+
+  DateTime? _parseTripDateTime(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
+  Future<void> _openEditTripDialog(Map<String, dynamic> trip) async {
+    final fromController = TextEditingController(text: (trip["from"] ?? "").toString());
+    final toController = TextEditingController(text: (trip["to"] ?? "").toString());
+    final meetingController =
+        TextEditingController(text: (trip["meetingPoint"] ?? "").toString());
+    final costController = TextEditingController(text: (trip["cost"] ?? 0).toString());
+    final descController =
+        TextEditingController(text: (trip["description"] ?? "").toString());
+
+    final joined = (trip["joined"] as num?)?.toInt() ?? 1;
+    final currentMax = (trip["maxPeople"] as num?)?.toInt() ?? 4;
+    int maxPeople = _maxPeopleOptions.contains(currentMax) ? currentMax : 4;
+    if (maxPeople < joined) {
+      maxPeople = joined > 6 ? 6 : joined;
+    }
+
+    DateTime? selectedDateTime = _parseTripDateTime(trip["dateTime"]);
+    DateTime? selectedDate = selectedDateTime;
+    TimeOfDay? selectedTime =
+        selectedDateTime != null ? TimeOfDay.fromDateTime(selectedDateTime) : null;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text("Edit Trip"),
+              content: SizedBox(
+                width: 420,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: fromController,
+                        decoration: const InputDecoration(labelText: "Departure point"),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: toController,
+                        decoration: const InputDecoration(labelText: "Destination"),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: meetingController,
+                        decoration: const InputDecoration(labelText: "Meeting point"),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: dialogContext,
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime(2100),
+                                  initialDate: selectedDate ?? DateTime.now(),
+                                );
+                                if (picked != null) {
+                                  setDialogState(() => selectedDate = picked);
+                                }
+                              },
+                              child: Text(
+                                selectedDate == null
+                                    ? "Select date"
+                                    : "${selectedDate!.day}/${selectedDate!.month}/${selectedDate!.year}",
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () async {
+                                final picked = await showTimePicker(
+                                  context: dialogContext,
+                                  initialTime: selectedTime ?? TimeOfDay.now(),
+                                );
+                                if (picked != null) {
+                                  setDialogState(() => selectedTime = picked);
+                                }
+                              },
+                              child: Text(
+                                selectedTime == null
+                                    ? "Select time"
+                                    : selectedTime!.format(dialogContext),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<int>(
+                        value: maxPeople,
+                        items: _maxPeopleOptions
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e,
+                                child: Text("$e people"),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setDialogState(() => maxPeople = v);
+                        },
+                        decoration: const InputDecoration(labelText: "Max people"),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: costController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: "Cost per person"),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: descController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(labelText: "Description"),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final from = fromController.text.trim();
+                    final to = toController.text.trim();
+                    final meetingPoint = meetingController.text.trim();
+                    final cost = int.tryParse(costController.text.trim()) ?? 0;
+
+                    if (from.isEmpty || to.isEmpty || selectedDate == null || selectedTime == null) {
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        const SnackBar(content: Text("Fill required fields")),
+                      );
+                      return;
+                    }
+
+                    if (maxPeople < joined) {
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        SnackBar(content: Text("Max people cannot be less than $joined")),
+                      );
+                      return;
+                    }
+
+                    final updatedDateTime = DateTime(
+                      selectedDate!.year,
+                      selectedDate!.month,
+                      selectedDate!.day,
+                      selectedTime!.hour,
+                      selectedTime!.minute,
+                    );
+
+                    await db.collection("trips").doc(widget.tripId).update({
+                      "from": from,
+                      "to": to,
+                      "meetingPoint": meetingPoint,
+                      "dateTime": updatedDateTime,
+                      "maxPeople": maxPeople,
+                      "cost": cost,
+                      "description": descController.text.trim(),
+                    });
+
+                    if (dialogContext.mounted) {
+                      Navigator.pop(dialogContext);
+                    }
+                  },
+                  child: const Text("Save"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   String _reviewDocId(String reviewerId, String revieweeId) {
@@ -606,6 +932,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                           ),
                         ),
                         const Spacer(),
+                        if (isCreator && !completed && !expired)
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Color(0xffff7a00)),
+                            onPressed: () => _openEditTripDialog(d),
+                          ),
                         if (isCreator)
                           IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
@@ -715,28 +1046,45 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                 padding: const EdgeInsets.all(16),
                 child: SizedBox(
                   height: 56,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: secondary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                    ),
-                    onPressed: (loading || seatsLeft <= 0 || joinedAlready || !canJoinByInvite)
-                        ? null
-                        : () => handleJoin(d),
-                    child: loading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : Text(
-                            joinedAlready
-                                ? "Joined"
-                                : (canJoinByInvite ? "Join Trip" : "Invite Only"),
-                            style: const TextStyle(
-                              color: Colors.black,
-                              fontWeight: FontWeight.bold,
+                  child: joinedAlready
+                      ? ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red[300],
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
                             ),
                           ),
-                  ),
+                          onPressed: loading ? null : () => _openLeaveTripDialog(d),
+                          child: loading
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : const Text(
+                                  "Leave Trip",
+                                  style: TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        )
+                      : ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: secondary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          onPressed: (loading || seatsLeft <= 0 || !canJoinByInvite)
+                              ? null
+                              : () => handleJoin(d),
+                          child: loading
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : Text(
+                                  canJoinByInvite ? "Join Trip" : "Invite Only",
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                        ),
                 ),
               );
             }
