@@ -118,10 +118,19 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
     if (fromController.text.isEmpty ||
         destination.isEmpty ||
+        meetingController.text.trim().isEmpty ||
         selectedDate == null ||
         selectedTime == null) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Fill required fields")));
+          .showSnackBar(const SnackBar(content: Text("Fill all required fields (*)")));
+      return;
+    }
+
+    final parsedCost = int.tryParse(costController.text.trim()) ?? 0;
+    if (parsedCost > 2000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Cost per person cannot be more than 2000")),
+      );
       return;
     }
 
@@ -169,7 +178,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         "from": fromController.text.trim(),
         "to": destination,
         "meetingPoint": meetingController.text.trim(),
-        "cost": int.tryParse(costController.text) ?? 0,
+        "cost": parsedCost,
         "maxPeople": maxPeople,
         "joined": 1,
         "description": descController.text.trim(),
@@ -322,7 +331,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   TextField(
                     controller: fromController,
                     decoration:
-                        const InputDecoration(labelText: "Departure point"),
+                        const InputDecoration(labelText: "Departure point *"),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -334,7 +343,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                     onChanged: (v) =>
                         setState(() => selectedDestination = v!),
                     decoration:
-                        const InputDecoration(labelText: "Destination"),
+                        const InputDecoration(labelText: "Destination *"),
                   ),
                   if (isOther)
                     TextField(
@@ -343,11 +352,11 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                           const InputDecoration(labelText: "Enter destination"),
                     ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: meetingController,
-                    decoration:
-                        const InputDecoration(labelText: "Meeting point"),
-                  ),
+                    TextField(
+                      controller: meetingController,
+                      decoration:
+                          const InputDecoration(labelText: "Meeting point *"),
+                    ),
                 ],
               ),
             ),
@@ -360,7 +369,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                     child: OutlinedButton(
                       onPressed: pickDate,
                       child: Text(selectedDate == null
-                          ? "Select date"
+                          ? "Select date *"
                           : selectedDate.toString().split(" ")[0]),
                     ),
                   ),
@@ -369,7 +378,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                     child: OutlinedButton(
                       onPressed: pickTime,
                       child: Text(selectedTime == null
-                          ? "Select time"
+                          ? "Select time *"
                           : selectedTime!.format(context)),
                     ),
                   ),

@@ -137,6 +137,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         await db.collection("notifications").add({
           "userId": trip["ownerId"],
           "message": "$name joined your trip",
+          "type": "trip_joined",
+          "tripId": widget.tripId,
+          "actorId": user.uid,
+          "actorName": name,
           "createdAt": FieldValue.serverTimestamp(),
         });
       } catch (_) {}
@@ -262,6 +266,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         await db.collection("notifications").add({
           "userId": trip["ownerId"],
           "message": "$userName left your trip. Reason: $reason",
+          "type": "trip_left",
+          "tripId": widget.tripId,
+          "actorId": user.uid,
+          "actorName": userName,
           "createdAt": FieldValue.serverTimestamp(),
         });
       } catch (_) {}
@@ -958,6 +966,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     const SizedBox(height: 16),
                     _card(
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
@@ -992,6 +1001,18 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                               Expanded(child: Text(d["meetingPoint"] ?? "")),
                             ],
                           ),
+                          if ((d["description"] ?? "").toString().trim().isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            Text(
+                              "Description",
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text((d["description"] ?? "").toString()),
+                          ],
                         ],
                       ),
                     ),

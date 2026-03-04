@@ -75,6 +75,23 @@ service cloud.firestore {
         );
     }
 
+    function isTripEventType(t) {
+      return t is string && (t == "trip_joined" || t == "trip_left");
+    }
+
+    function canCreateTripEventNotification() {
+      return signedIn()
+        && request.resource.data.userId is string
+        && request.resource.data.message is string
+        && request.resource.data.tripId is string
+        && request.resource.data.actorId is string
+        && request.resource.data.actorName is string
+        && isTripEventType(request.resource.data.type)
+        && request.resource.data.actorId == uid()
+        && tripExists(request.resource.data.tripId)
+        && request.resource.data.userId == tripOwnerId(request.resource.data.tripId);
+    }
+
     // User profiles
     match /users/{userId} {
       allow read: if signedIn();
@@ -155,7 +172,7 @@ service cloud.firestore {
     // Notifications
     match /notifications/{docId} {
       // Admin can send notifications
-      allow create: if isAdmin();
+      allow create: if isAdmin() || canCreateTripEventNotification();
 
       // Users can read only their own notifications
       allow read: if signedIn() && resource.data.userId == uid();
