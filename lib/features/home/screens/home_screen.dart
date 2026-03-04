@@ -298,6 +298,35 @@ class _HomeScreenState extends State<HomeScreen> {
                       return haystack.contains(_searchQuery);
                     }).toList();
 
+                    filtered.sort((a, b) {
+                      final ad = a.data() as Map<String, dynamic>;
+                      final bd = b.data() as Map<String, dynamic>;
+
+                      DateTime? adt;
+                      DateTime? bdt;
+                      try {
+                        adt = ad["dateTime"]?.toDate();
+                      } catch (_) {}
+                      try {
+                        bdt = bd["dateTime"]?.toDate();
+                      } catch (_) {}
+
+                      final aActive = adt != null && now.isBefore(adt);
+                      final bActive = bdt != null && now.isBefore(bdt);
+                      if (aActive != bActive) return aActive ? -1 : 1;
+
+                      if (adt == null && bdt != null) return 1;
+                      if (adt != null && bdt == null) return -1;
+                      if (adt != null && bdt != null) {
+                        final dateCmp = adt.compareTo(bdt);
+                        if (dateCmp != 0) return dateCmp;
+                      }
+
+                      final aj = (ad["joined"] as num?)?.toInt() ?? 0;
+                      final bj = (bd["joined"] as num?)?.toInt() ?? 0;
+                      return bj.compareTo(aj);
+                    });
+
                     if (filtered.isEmpty) {
                       return const Center(child: Text("No trips match your search"));
                     }
