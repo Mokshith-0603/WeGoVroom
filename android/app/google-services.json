@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:202225012572:android:c32ef9602f70cb97523b99",
         "android_client_info": {
-          "package_name": "com.example.wegovroom"
+          "package_name": "com.wegovroom.app"
         }
       },
       "oauth_client": [],
