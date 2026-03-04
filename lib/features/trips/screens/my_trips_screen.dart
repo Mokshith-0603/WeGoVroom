@@ -19,7 +19,7 @@ class MyTripsScreen extends StatelessWidget {
     final bg = theme.scaffoldBackgroundColor;
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
@@ -40,6 +40,7 @@ class MyTripsScreen extends StatelessWidget {
               Tab(text: "Joined"),
               Tab(text: "Pending"),
               Tab(text: "History"),
+              Tab(text: "People"),
             ],
           ),
         ),
@@ -49,6 +50,7 @@ class MyTripsScreen extends StatelessWidget {
             _joined(uid, context),
             _pending(uid, context),
             _history(uid, context),
+            _people(uid, context),
           ],
         ),
       ),
@@ -283,6 +285,66 @@ class MyTripsScreen extends StatelessWidget {
     );
   }
 
+  Widget _people(String uid, BuildContext context) {
+    final r = context.rs;
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection("tripParticipants")
+          .where("userId", isEqualTo: uid)
+          .snapshots(),
+      builder: (_, snap) {
+        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        final participantDocs = snap.data!.docs;
+
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: _fetchPeople(uid, participantDocs),
+          builder: (_, peopleSnap) {
+            if (!peopleSnap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final people = peopleSnap.data!;
+            if (people.isEmpty) {
+              return const Center(child: Text("No people found from your trips"));
+            }
+
+            return ListView.builder(
+              padding: EdgeInsets.all(r(12)),
+              itemCount: people.length,
+              itemBuilder: (_, i) {
+                final person = people[i];
+                final name = (person["name"] ?? "User").toString();
+                final tripsTogether = (person["tripsTogether"] ?? 0) as int;
+
+                return Container(
+                  margin: EdgeInsets.only(bottom: r(10)),
+                  padding: EdgeInsets.all(r(14)),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(r(16)),
+                    boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black12)],
+                  ),
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xffff7a00),
+                      child: Icon(Icons.person, color: Colors.white),
+                    ),
+                    title: Text(
+                      name,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text("Trips together: $tripsTogether"),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<List<DocumentSnapshot>> _fetchHistoryTrips(
     String uid,
     List<QueryDocumentSnapshot> participantDocs,
@@ -319,6 +381,65 @@ class MyTripsScreen extends StatelessWidget {
     });
 
     return filtered;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchPeople(
+    String uid,
+    List<QueryDocumentSnapshot> participantDocs,
+  ) async {
+    final db = FirebaseFirestore.instance;
+    final historyTrips = await _fetchHistoryTrips(uid, participantDocs);
+    if (historyTrips.isEmpty) return const [];
+
+    final peopleById = <String, Map<String, dynamic>>{};
+
+    for (final tripDoc in historyTrips) {
+      if (!tripDoc.exists || tripDoc.data() == null) continue;
+      final tripData = tripDoc.data() as Map<String, dynamic>;
+      final tripId = tripDoc.id;
+
+      final ownerId = (tripData["ownerId"] ?? "").toString();
+      final ownerName = (tripData["ownerName"] ?? "Host").toString();
+      if (ownerId.isNotEmpty && ownerId != uid) {
+        final existing = peopleById[ownerId] ?? {
+          "userId": ownerId,
+          "name": ownerName,
+          "tripsTogether": 0,
+        };
+        existing["tripsTogether"] = ((existing["tripsTogether"] ?? 0) as int) + 1;
+        peopleById[ownerId] = existing;
+      }
+
+      final partSnap = await db
+          .collection("tripParticipants")
+          .where("tripId", isEqualTo: tripId)
+          .get();
+      for (final part in partSnap.docs) {
+        final data = part.data();
+        final userId = (data["userId"] ?? "").toString();
+        if (userId.isEmpty || userId == uid) continue;
+
+        final existing = peopleById[userId] ?? {
+          "userId": userId,
+          "name": (data["name"] ?? "User").toString(),
+          "tripsTogether": 0,
+        };
+        existing["name"] = (data["name"] ?? existing["name"] ?? "User").toString();
+        existing["tripsTogether"] = ((existing["tripsTogether"] ?? 0) as int) + 1;
+        peopleById[userId] = existing;
+      }
+    }
+
+    final people = peopleById.values.toList();
+    people.sort((a, b) {
+      final ta = (a["tripsTogether"] ?? 0) as int;
+      final tb = (b["tripsTogether"] ?? 0) as int;
+      if (ta != tb) return tb.compareTo(ta);
+      final na = (a["name"] ?? "").toString().toLowerCase();
+      final nb = (b["name"] ?? "").toString().toLowerCase();
+      return na.compareTo(nb);
+    });
+    return people;
   }
 
   Future<List<DocumentSnapshot>> _fetchTrips(List<QueryDocumentSnapshot> source) async {
