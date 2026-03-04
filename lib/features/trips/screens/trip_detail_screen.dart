@@ -20,9 +20,61 @@ class TripDetailScreen extends StatefulWidget {
 class _TripDetailScreenState extends State<TripDetailScreen> {
   final db = FirebaseFirestore.instance;
   final List<int> _maxPeopleOptions = [2, 3, 4, 5, 6];
+  final Map<String, Future<Map<String, dynamic>>> _participantInfoCache = {};
 
   bool loading = false;
   bool joinedAlready = false;
+
+  Future<Map<String, dynamic>> _participantInfo(String userId) async {
+    final userDoc = await db.collection("users").doc(userId).get();
+    final userData = userDoc.data() ?? const <String, dynamic>{};
+    final gender = (userData["gender"] ?? "Not set").toString();
+
+    final completedTripIds = <String>{};
+    final now = DateTime.now();
+
+    final ownerTrips = await db.collection("trips").where("ownerId", isEqualTo: userId).get();
+    for (final doc in ownerTrips.docs) {
+      final data = doc.data();
+      DateTime? dt;
+      try {
+        dt = (data["dateTime"] as Timestamp?)?.toDate();
+      } catch (_) {}
+      final autoEnded = dt != null && !now.isBefore(dt.add(const Duration(hours: 12)));
+      if (data["completed"] == true || autoEnded) {
+        completedTripIds.add(doc.id);
+      }
+    }
+
+    final joinedParts = await db
+        .collection("tripParticipants")
+        .where("userId", isEqualTo: userId)
+        .get();
+    for (final p in joinedParts.docs) {
+      final tripId = p.data()["tripId"] as String?;
+      if (tripId == null || tripId.isEmpty || completedTripIds.contains(tripId)) continue;
+      final tripDoc = await db.collection("trips").doc(tripId).get();
+      if (!tripDoc.exists) continue;
+      final tripData = tripDoc.data() ?? const <String, dynamic>{};
+      DateTime? dt;
+      try {
+        dt = (tripData["dateTime"] as Timestamp?)?.toDate();
+      } catch (_) {}
+      final autoEnded = dt != null && !now.isBefore(dt.add(const Duration(hours: 12)));
+      if (tripData["completed"] == true || autoEnded) {
+        completedTripIds.add(tripId);
+      }
+    }
+
+    return {
+      "gender": gender,
+      "trips": completedTripIds.length,
+    };
+  }
+
+  Future<Map<String, dynamic>> _participantInfoCached(String userId) {
+    return _participantInfoCache.putIfAbsent(userId, () => _participantInfo(userId));
+  }
 
   @override
   void initState() {
@@ -285,6 +337,127 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to leave trip: $e")),
+        );
+      }
+    }
+
+    if (mounted) {
+      setState(() => loading = false);
+    }
+  }
+
+  Future<void> _openRemoveParticipantDialog({
+    required DocumentReference participantRef,
+    required String participantUserId,
+    required String participantName,
+    required Map<String, dynamic> trip,
+  }) async {
+    final reasonController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text("Remove $participantName"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Please provide a reason for removing this participant."),
+              const SizedBox(height: 10),
+              TextField(
+                controller: reasonController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  hintText: "Reason",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final reason = reasonController.text.trim();
+                if (reason.isEmpty) {
+                  ScaffoldMessenger.of(this.context).showSnackBar(
+                    const SnackBar(content: Text("Reason is required")),
+                  );
+                  return;
+                }
+                Navigator.pop(dialogContext);
+                await _removeParticipant(
+                  participantRef: participantRef,
+                  participantUserId: participantUserId,
+                  participantName: participantName,
+                  trip: trip,
+                  reason: reason,
+                );
+              },
+              child: const Text("Remove"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _removeParticipant({
+    required DocumentReference participantRef,
+    required String participantUserId,
+    required String participantName,
+    required Map<String, dynamic> trip,
+    required String reason,
+  }) async {
+    setState(() => loading = true);
+    try {
+      await db.runTransaction((tx) async {
+        final tripRef = db.collection("trips").doc(widget.tripId);
+        final tripSnap = await tx.get(tripRef);
+        final tripData = tripSnap.data() ?? const <String, dynamic>{};
+        final joined = (tripData["joined"] as num?)?.toInt() ?? 1;
+        final nextJoined = (joined - 1) < 1 ? 1 : (joined - 1);
+
+        tx.delete(participantRef);
+        tx.update(tripRef, {"joined": nextJoined});
+      });
+
+      try {
+        await db.collection("tripKickLogs").add({
+          "tripId": widget.tripId,
+          "userId": participantUserId,
+          "userName": participantName,
+          "reason": reason,
+          "removedAt": FieldValue.serverTimestamp(),
+          "removedBy": context.read<AuthProvider>().user?.uid,
+        });
+      } catch (_) {}
+
+      try {
+        final actorName = trip["ownerName"]?.toString() ?? "Host";
+        await db.collection("notifications").add({
+          "userId": participantUserId,
+          "message": "You were removed from trip by $actorName. Reason: $reason",
+          "type": "trip_removed",
+          "tripId": widget.tripId,
+          "actorId": context.read<AuthProvider>().user?.uid,
+          "actorName": actorName,
+          "createdAt": FieldValue.serverTimestamp(),
+        });
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Participant removed")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to remove participant: $e")),
         );
       }
     }
@@ -680,6 +853,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     required bool allowReview,
     required String? currentUserId,
     required String ownerName,
+    required bool allowHostRemove,
+    required Map<String, dynamic> tripData,
   }) {
     return StreamBuilder<QuerySnapshot>(
       stream: db
@@ -737,6 +912,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     canCurrentUserReview &&
                     participantId != null &&
                     participantId != currentUserId;
+                final canRemove = allowHostRemove &&
+                    participantId != null &&
+                    participantId != ownerId;
 
                 return ListTile(
                   onTap: participantId == null
@@ -754,6 +932,19 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (isHost) const Text("Host"),
+                      if (participantId != null)
+                        FutureBuilder<Map<String, dynamic>>(
+                          future: _participantInfoCached(participantId),
+                          builder: (_, infoSnap) {
+                            final info = infoSnap.data ?? const <String, dynamic>{};
+                            final gender = (info["gender"] ?? "Not set").toString();
+                            final trips = (info["trips"] ?? 0) as int;
+                            return Text(
+                              "Gender: $gender  |  Trips: $trips",
+                              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                            );
+                          },
+                        ),
                       if (participantId != null)
                         StreamBuilder<QuerySnapshot>(
                           stream: db
@@ -784,17 +975,35 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                         ),
                     ],
                   ),
-                  trailing: showReviewButton
-                      ? TextButton(
-                          onPressed: () => _openReviewDialog(
-                            reviewerId: currentUserId,
-                            reviewerName: reviewerName,
-                            revieweeId: participantId,
-                            revieweeName: name,
-                          ),
-                          child: const Text("Review"),
-                        )
-                      : const Text("View"),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (canRemove)
+                        IconButton(
+                          tooltip: "Remove user",
+                          icon: const Icon(Icons.person_remove, color: Colors.red),
+                          onPressed: loading
+                              ? null
+                              : () => _openRemoveParticipantDialog(
+                                    participantRef: p.reference,
+                                    participantUserId: participantId!,
+                                    participantName: name.toString(),
+                                    trip: tripData,
+                                  ),
+                        ),
+                      showReviewButton
+                          ? TextButton(
+                              onPressed: () => _openReviewDialog(
+                                reviewerId: currentUserId,
+                                reviewerName: reviewerName,
+                                revieweeId: participantId,
+                                revieweeName: name,
+                              ),
+                              child: const Text("Review"),
+                            )
+                          : const Text("View"),
+                    ],
+                  ),
                 );
               })
             ],
@@ -1049,6 +1258,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       allowReview: allowReview,
                       currentUserId: user?.uid,
                       ownerName: d["ownerName"] ?? "Host",
+                      allowHostRemove: isCreator && !tripEnded,
+                      tripData: d,
                     ),
                     const SizedBox(height: 16),
                     _reviewsSection(),
