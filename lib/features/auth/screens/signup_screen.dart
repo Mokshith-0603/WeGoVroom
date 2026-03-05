@@ -22,8 +22,9 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Future<void> create() async {
     if (pass.text != confirm.text) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Passwords don’t match")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Passwords don’t match")));
       return;
     }
 
@@ -35,8 +36,9 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => loading = false);
 
     if (error != null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
       return;
     }
 
@@ -44,15 +46,51 @@ class _SignupScreenState extends State<SignupScreen> {
 
     await showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text("Verify your email"),
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Row(
+          children: [
+            Icon(
+              Icons.mark_email_unread_rounded,
+              color: Color(0xffff7a00),
+              size: 28,
+            ),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                "IMPORTANT",
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 22,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ],
+        ),
         content: const Text(
-          "A confirmation mail has been sent to your email. Check your spam mail for verification, then sign in to continue profile setup.",
+          "Check your spam mail for verification.",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+            height: 1.35,
+          ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xffff7a00),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text(
+                "OK",
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
           ),
         ],
       ),
@@ -85,62 +123,70 @@ class _SignupScreenState extends State<SignupScreen> {
                 builder: (context, constraints) {
                   return SingleChildScrollView(
                     child: ConstrainedBox(
-                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
                       child: ResponsiveContent(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-               CircleAvatar(
-                 radius: r(42),
-                 backgroundColor: Colors.white,
-                child: Icon(Icons.person_add_alt_1, size: r(32)),
-              ),
+                            CircleAvatar(
+                              radius: r(42),
+                              backgroundColor: Colors.white,
+                              child: Icon(Icons.person_add_alt_1, size: r(32)),
+                            ),
 
-              SizedBox(height: r(24)),
+                            SizedBox(height: r(24)),
 
-              Text(
-                "Create your account",
-                style: TextStyle(fontSize: r(26), fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: r(6)),
-              Text(
-                "Use only college email ids",
-                style: TextStyle(
-                  fontSize: r(12.5),
-                  color: const Color(0xffff7a00),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+                            Text(
+                              "Create your account",
+                              style: TextStyle(
+                                fontSize: r(26),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: r(6)),
+                            Text(
+                              "Use only college email ids",
+                              style: TextStyle(
+                                fontSize: r(12.5),
+                                color: const Color(0xffff7a00),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
 
-              SizedBox(height: r(32)),
+                            SizedBox(height: r(32)),
 
-              _field(email, "College email", Icons.email),
-              SizedBox(height: r(12)),
-              _field(
-                pass,
-                "Password",
-                Icons.lock,
-                obscure: true,
-                visible: _showPassword,
-                onToggleVisibility: () {
-                  setState(() => _showPassword = !_showPassword);
-                },
-              ),
-              SizedBox(height: r(12)),
-              _field(
-                confirm,
-                "Confirm Password",
-                Icons.lock,
-                obscure: true,
-                visible: _showConfirmPassword,
-                onToggleVisibility: () {
-                  setState(() => _showConfirmPassword = !_showConfirmPassword);
-                },
-              ),
+                            _field(email, "College email", Icons.email),
+                            SizedBox(height: r(12)),
+                            _field(
+                              pass,
+                              "Password",
+                              Icons.lock,
+                              obscure: true,
+                              visible: _showPassword,
+                              onToggleVisibility: () {
+                                setState(() => _showPassword = !_showPassword);
+                              },
+                            ),
+                            SizedBox(height: r(12)),
+                            _field(
+                              confirm,
+                              "Confirm Password",
+                              Icons.lock,
+                              obscure: true,
+                              visible: _showConfirmPassword,
+                              onToggleVisibility: () {
+                                setState(
+                                  () => _showConfirmPassword =
+                                      !_showConfirmPassword,
+                                );
+                              },
+                            ),
 
-              SizedBox(height: r(24)),
+                            SizedBox(height: r(24)),
 
-               _button()
+                            _button(),
                           ],
                         ),
                       ),
@@ -167,8 +213,14 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _field(TextEditingController c, String h, IconData i,
-      {bool obscure = false, bool visible = false, VoidCallback? onToggleVisibility}) {
+  Widget _field(
+    TextEditingController c,
+    String h,
+    IconData i, {
+    bool obscure = false,
+    bool visible = false,
+    VoidCallback? onToggleVisibility,
+  }) {
     final r = context.rs;
     return TextField(
       controller: c,
@@ -195,8 +247,9 @@ class _SignupScreenState extends State<SignupScreen> {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(r(30)),
-          gradient:
-              const LinearGradient(colors: [Color(0xffff7a00), Color(0xffff9a3c)]),
+          gradient: const LinearGradient(
+            colors: [Color(0xffff7a00), Color(0xffff9a3c)],
+          ),
         ),
         child: Material(
           color: Colors.transparent,
@@ -206,9 +259,13 @@ class _SignupScreenState extends State<SignupScreen> {
             child: Center(
               child: loading
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text("Create account",
+                  : const Text(
+                      "Create account",
                       style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold)),
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
             ),
           ),
         ),
