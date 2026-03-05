@@ -38,7 +38,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     "City Center",
     "Shopping Mall",
     "Hospital",
-    "Other"
+    "Other",
   ];
 
   Future<void> pickDate() async {
@@ -61,52 +61,70 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
   /// ⭐ CHECK ACTIVE TRIP (IGNORE HISTORY)
   Future<bool> hasActiveTrip(String uid) async {
-    final now = DateTime.now();
+    final activeThreshold = DateTime.now().subtract(const Duration(hours: 12));
 
-    // check owned trips in addition to participant records
-    final ownSnap = await db
+    final ownSnapFuture = db
         .collection("trips")
         .where("ownerId", isEqualTo: uid)
         .get();
-    for (final t in ownSnap.docs) {
-      final data = t.data();
-      final dt = data["dateTime"]?.toDate();
-      final completed = data["completed"] == true;
-      if (dt != null && !completed && now.isBefore(dt.add(const Duration(hours: 12)))) {
-        return true;
-      }
-    }
 
-    final parts = await db
+    final partsFuture = db
         .collection("tripParticipants")
         .where("userId", isEqualTo: uid)
         .get();
 
-    for (final p in parts.docs) {
-      final tripId = p["tripId"];
-      final tripDoc = await db.collection("trips").doc(tripId).get();
-
-      if (!tripDoc.exists) {
-        await p.reference.delete(); // cleanup orphan
-        continue;
-      }
-
-      final data = tripDoc.data()!;
+    final ownSnap = await ownSnapFuture;
+    final hasOwnedActive = ownSnap.docs.any((doc) {
+      final data = doc.data();
       final ts = data["dateTime"];
-
-      if (ts == null) continue;
-
-      DateTime dt;
+      DateTime? dt;
       try {
-        dt = ts.toDate();
+        dt = (ts as Timestamp?)?.toDate();
       } catch (_) {
-        continue;
+        dt = null;
       }
+      return data["completed"] != true &&
+          dt != null &&
+          dt.isAfter(activeThreshold);
+    });
+    if (hasOwnedActive) return true;
 
-      final completed = data["completed"] == true;
-      if (!completed && now.isBefore(dt.add(const Duration(hours: 12)))) {
-        return true; // active future trip exists
-      }
+    final parts = await partsFuture;
+    if (parts.docs.isEmpty) return false;
+
+    final tripIds = parts.docs
+        .map((p) => (p.data()["tripId"] ?? "").toString())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    if (tripIds.isEmpty) return false;
+
+    for (var i = 0; i < tripIds.length; i += 10) {
+      final chunk = tripIds.sublist(
+        i,
+        i + 10 > tripIds.length ? tripIds.length : i + 10,
+      );
+
+      final tripSnap = await db
+          .collection("trips")
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+
+      final hasJoinedActive = tripSnap.docs.any((doc) {
+        final data = doc.data();
+        final ts = data["dateTime"];
+        DateTime? dt;
+        try {
+          dt = (ts as Timestamp?)?.toDate();
+        } catch (_) {
+          dt = null;
+        }
+        return data["completed"] != true &&
+            dt != null &&
+            dt.isAfter(activeThreshold);
+      });
+      if (hasJoinedActive) return true;
     }
 
     return false;
@@ -126,22 +144,27 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         meetingController.text.trim().isEmpty ||
         selectedDate == null ||
         selectedTime == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Fill all required fields (*)")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Fill all required fields (*)")),
+      );
       return;
     }
 
     final parsedCost = int.tryParse(costController.text.trim()) ?? 0;
     if (parsedCost > 2000) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Cost per person cannot be more than 2000")),
+        const SnackBar(
+          content: Text("Cost per person cannot be more than 2000"),
+        ),
       );
       return;
     }
 
     if (!isPublic && _selectedInviteeIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Select at least one invitee for a private trip")),
+        const SnackBar(
+          content: Text("Select at least one invitee for a private trip"),
+        ),
       );
       return;
     }
@@ -155,7 +178,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       if (active) {
         setState(() => loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("You already have an active trip")));
+          const SnackBar(content: Text("You already have an active trip")),
+        );
         return;
       }
 
@@ -163,8 +187,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       final userDoc = await db.collection("users").doc(user.uid).get();
       final userData = userDoc.data() ?? {};
 
-      final name =
-          userData["displayName"] ?? userData["name"] ?? "Host";
+      final name = userData["displayName"] ?? userData["name"] ?? "Host";
       final avatar = userData["avatar"] ?? 0;
 
       final dateTime = DateTime(
@@ -189,7 +212,9 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         "description": descController.text.trim(),
         "isPublic": isPublic,
         "invitedUserIds": isPublic ? <String>[] : _selectedInviteeIds.toList(),
-        "invitedUserEmails": isPublic ? <String>[] : _selectedInviteeEmails.toList(),
+        "invitedUserEmails": isPublic
+            ? <String>[]
+            : _selectedInviteeEmails.toList(),
         "dateTime": dateTime,
         "createdAt": FieldValue.serverTimestamp(),
       });
@@ -234,7 +259,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                         itemBuilder: (_, i) {
                           final doc = candidates[i];
                           final data = doc.data();
-                          final name = (data["displayName"] ?? "User").toString();
+                          final name = (data["displayName"] ?? "User")
+                              .toString();
                           final email = (data["email"] ?? "").toString();
                           final selected = tempSelected.contains(doc.id);
 
@@ -272,8 +298,12 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                         if (_selectedInviteeIds.contains(doc.id)) {
                           final data = doc.data();
                           _selectedInviteeNames[doc.id] =
-                              (data["displayName"] ?? data["email"] ?? "User").toString();
-                          final email = (data["email"] ?? "").toString().trim().toLowerCase();
+                              (data["displayName"] ?? data["email"] ?? "User")
+                                  .toString();
+                          final email = (data["email"] ?? "")
+                              .toString()
+                              .trim()
+                              .toLowerCase();
                           if (email.isNotEmpty) {
                             _selectedInviteeEmails.add(email);
                           }
@@ -304,11 +334,13 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Icon(icon, color: const Color(0xffff7a00)),
-            const SizedBox(width: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold))
-          ]),
+          Row(
+            children: [
+              Icon(icon, color: const Color(0xffff7a00)),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -335,33 +367,35 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 children: [
                   TextField(
                     controller: fromController,
-                    decoration:
-                        const InputDecoration(labelText: "Departure point *"),
+                    decoration: const InputDecoration(
+                      labelText: "Departure point *",
+                    ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: selectedDestination,
                     items: hotspots
-                        .map((e) =>
-                            DropdownMenuItem(value: e, child: Text(e)))
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                         .toList(),
-                    onChanged: (v) =>
-                        setState(() => selectedDestination = v!),
-                    decoration:
-                        const InputDecoration(labelText: "Destination *"),
+                    onChanged: (v) => setState(() => selectedDestination = v!),
+                    decoration: const InputDecoration(
+                      labelText: "Destination *",
+                    ),
                   ),
                   if (isOther)
                     TextField(
                       controller: customDestinationController,
-                      decoration:
-                          const InputDecoration(labelText: "Enter destination"),
+                      decoration: const InputDecoration(
+                        labelText: "Enter destination",
+                      ),
                     ),
                   const SizedBox(height: 12),
-                    TextField(
-                      controller: meetingController,
-                      decoration:
-                          const InputDecoration(labelText: "Meeting point *"),
+                  TextField(
+                    controller: meetingController,
+                    decoration: const InputDecoration(
+                      labelText: "Meeting point *",
                     ),
+                  ),
                 ],
               ),
             ),
@@ -373,18 +407,22 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: pickDate,
-                      child: Text(selectedDate == null
-                          ? "Select date *"
-                          : selectedDate.toString().split(" ")[0]),
+                      child: Text(
+                        selectedDate == null
+                            ? "Select date *"
+                            : selectedDate.toString().split(" ")[0],
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton(
                       onPressed: pickTime,
-                      child: Text(selectedTime == null
-                          ? "Select time *"
-                          : selectedTime!.format(context)),
+                      child: Text(
+                        selectedTime == null
+                            ? "Select time *"
+                            : selectedTime!.format(context),
+                      ),
                     ),
                   ),
                 ],
@@ -398,26 +436,29 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   DropdownButtonFormField<int>(
                     value: maxPeople,
                     items: [2, 3, 4, 5, 6]
-                        .map((e) =>
-                            DropdownMenuItem(value: e, child: Text("$e people")))
+                        .map(
+                          (e) => DropdownMenuItem(
+                            value: e,
+                            child: Text("$e people"),
+                          ),
+                        )
                         .toList(),
                     onChanged: (v) => setState(() => maxPeople = v!),
-                    decoration:
-                        const InputDecoration(labelText: "Max people"),
+                    decoration: const InputDecoration(labelText: "Max people"),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: costController,
                     keyboardType: TextInputType.number,
-                    decoration:
-                        const InputDecoration(labelText: "Cost per person"),
+                    decoration: const InputDecoration(
+                      labelText: "Cost per person",
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: descController,
                     maxLines: 3,
-                    decoration:
-                        const InputDecoration(labelText: "Description"),
+                    decoration: const InputDecoration(labelText: "Description"),
                   ),
                 ],
               ),
@@ -452,11 +493,13 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
-                      onPressed: user == null ? null : () => _pickInvitees(user.uid),
+                      onPressed: user == null
+                          ? null
+                          : () => _pickInvitees(user.uid),
                       icon: const Icon(Icons.group_add_outlined),
                       label: const Text("Choose Invitees"),
                     ),
-                  if (_selectedInviteeNames.isNotEmpty) ...[
+                    if (_selectedInviteeNames.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       Wrap(
                         spacing: 8,
@@ -486,7 +529,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xffff7a00),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30)),
+                    borderRadius: BorderRadius.circular(30),
+                  ),
                 ),
                 onPressed: loading ? null : createTrip,
                 child: loading

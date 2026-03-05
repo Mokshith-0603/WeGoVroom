@@ -30,46 +30,139 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String selectedChip = "All";
   String _searchQuery = "";
+  bool _isCheckingCreateTrip = false;
+  Future<Map<String, dynamic>>? _userProfileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _userProfileFuture = _loadUserProfile();
+  }
 
   Future<bool> hasActiveTrip(String uid) async {
     final db = FirebaseFirestore.instance;
-    final now = DateTime.now();
+    final activeThreshold = DateTime.now().subtract(const Duration(hours: 12));
 
-    final ownSnap = await db.collection("trips").where("ownerId", isEqualTo: uid).get();
-    for (final t in ownSnap.docs) {
-      final data = t.data();
-      final dt = data["dateTime"]?.toDate();
-      final completed = data["completed"] == true;
-      if (dt != null && !completed && now.isBefore(dt.add(const Duration(hours: 12)))) {
-        return true;
+    final ownActiveFuture = db
+        .collection("trips")
+        .where("ownerId", isEqualTo: uid)
+        .get();
+
+    final partsFuture = db
+        .collection("tripParticipants")
+        .where("userId", isEqualTo: uid)
+        .get();
+
+    final ownSnap = await ownActiveFuture;
+    final hasOwnedActive = ownSnap.docs.any((doc) {
+      final data = doc.data();
+      final ts = data["dateTime"];
+      DateTime? dt;
+      try {
+        dt = (ts as Timestamp?)?.toDate();
+      } catch (_) {
+        dt = null;
       }
-    }
+      return data["completed"] != true &&
+          dt != null &&
+          dt.isAfter(activeThreshold);
+    });
+    if (hasOwnedActive) return true;
 
-    final parts = await db.collection("tripParticipants").where("userId", isEqualTo: uid).get();
+    final parts = await partsFuture;
+    if (parts.docs.isEmpty) return false;
 
-    for (final p in parts.docs) {
-      final tripId = p["tripId"];
-      final tripDoc = await db.collection("trips").doc(tripId).get();
+    final tripIds = parts.docs
+        .map((p) => (p.data()["tripId"] ?? "").toString())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
 
-      if (!tripDoc.exists) continue;
+    if (tripIds.isEmpty) return false;
 
-      final data = tripDoc.data()!;
-      final dt = data["dateTime"]?.toDate();
-
-      final completed = data["completed"] == true;
-      if (dt != null && !completed && now.isBefore(dt.add(const Duration(hours: 12)))) {
-        return true;
-      }
+    for (var i = 0; i < tripIds.length; i += 10) {
+      final chunk = tripIds.sublist(
+        i,
+        i + 10 > tripIds.length ? tripIds.length : i + 10,
+      );
+      final snap = await db
+          .collection("trips")
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      final hasJoinedActive = snap.docs.any((doc) {
+        final data = doc.data();
+        final ts = data["dateTime"];
+        DateTime? dt;
+        try {
+          dt = (ts as Timestamp?)?.toDate();
+        } catch (_) {
+          dt = null;
+        }
+        return data["completed"] != true &&
+            dt != null &&
+            dt.isAfter(activeThreshold);
+      });
+      if (hasJoinedActive) return true;
     }
 
     return false;
   }
 
+  Future<Map<String, dynamic>> _loadUserProfile() async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) {
+      return const {"name": "", "avatar": 0};
+    }
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    final data = doc.data();
+
+    return {
+      "name": data?['displayName'] ?? user.email?.split('@').first ?? "",
+      "avatar": normalizeAvatarIndex(data?['avatar']),
+    };
+  }
+
+  Future<void> _onCreateTripPressed() async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null || _isCheckingCreateTrip) return;
+
+    setState(() => _isCheckingCreateTrip = true);
+    try {
+      final active = await hasActiveTrip(user.uid);
+      if (!mounted) return;
+
+      if (active) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("You already have an active trip")),
+        );
+        return;
+      }
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CreateTripScreen()),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Unable to open Create Trip. Try again."),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCheckingCreateTrip = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final user = context.read<AuthProvider>().user;
-    final db = FirebaseFirestore.instance;
-
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final secondary = scheme.secondary;
@@ -83,63 +176,43 @@ class _HomeScreenState extends State<HomeScreen> {
       return 'Good evening';
     }
 
-    Future<String> getDisplayName() async {
-      if (user == null) return '';
-      final doc = await db.collection('users').doc(user.uid).get();
-      if (!doc.exists) return '';
-      final data = doc.data();
-      return data?['displayName'] ?? user.email?.split('@').first ?? '';
-    }
-
-    Future<int> getAvatarIndex() async {
-      if (user == null) return 0;
-      final doc = await db.collection('users').doc(user.uid).get();
-      if (!doc.exists) return 0;
-      final data = doc.data();
-      return normalizeAvatarIndex(data?['avatar']);
-    }
-
     return Scaffold(
       backgroundColor: bg,
       drawer: const ProfileDrawer(),
       floatingActionButton: FloatingActionButton(
         backgroundColor: secondary,
-        onPressed: () async {
-          if (user == null) return;
-
-          final active = await hasActiveTrip(user.uid);
-          if (!mounted) return;
-
-          if (active) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("You already have an active trip")),
-            );
-            return;
-          }
-
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const CreateTripScreen()),
-          );
-        },
-        child: const Icon(Icons.add),
+        onPressed: _isCheckingCreateTrip ? null : _onCreateTripPressed,
+        child: _isCheckingCreateTrip
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Icon(Icons.add),
       ),
       body: SafeArea(
         child: ResponsiveContent(
           child: Column(
             children: [
               Padding(
-                padding: EdgeInsets.symmetric(horizontal: r(16), vertical: r(10)),
+                padding: EdgeInsets.symmetric(
+                  horizontal: r(16),
+                  vertical: r(10),
+                ),
                 child: Row(
                   children: [
                     Builder(
                       builder: (context) {
                         return GestureDetector(
                           onTap: () => Scaffold.of(context).openDrawer(),
-                          child: FutureBuilder<int>(
-                            future: getAvatarIndex(),
+                          child: FutureBuilder<Map<String, dynamic>>(
+                            future: _userProfileFuture,
                             builder: (_, snap) {
-                              return buildAvatar(snap.data ?? 0, radius: r(22));
+                              final avatar = (snap.data?["avatar"] ?? 0) as int;
+                              return buildAvatar(avatar, radius: r(22));
                             },
                           ),
                         );
@@ -154,10 +227,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             greeting(),
                             style: const TextStyle(fontWeight: FontWeight.w500),
                           ),
-                          FutureBuilder<String>(
-                            future: getDisplayName(),
+                          FutureBuilder<Map<String, dynamic>>(
+                            future: _userProfileFuture,
                             builder: (_, snap) {
-                              final name = snap.data ?? '';
+                              final name = (snap.data?["name"] ?? "")
+                                  .toString();
                               if (name.isEmpty) return const SizedBox.shrink();
                               return Text(
                                 'Hi $name',
@@ -185,18 +259,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       text: TextSpan(
                         style: theme.textTheme.headlineMedium,
                         children: [
-                          const TextSpan(text: 'WeGo', style: TextStyle(color: Colors.black)),
-                          TextSpan(text: 'Vroom', style: TextStyle(color: secondary)),
+                          const TextSpan(
+                            text: 'WeGo',
+                            style: TextStyle(color: Colors.black),
+                          ),
+                          TextSpan(
+                            text: 'Vroom',
+                            style: TextStyle(color: secondary),
+                          ),
                         ],
                       ),
-                    )
+                    ),
                   ],
                 ),
               ),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: r(16)),
                 child: TextField(
-                  onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+                  onChanged: (v) =>
+                      setState(() => _searchQuery = v.trim().toLowerCase()),
                   decoration: InputDecoration(
                     hintText: "Search trips, destinations...",
                     prefixIcon: const Icon(Icons.search),
@@ -224,7 +305,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       onTap: () => setState(() => selectedChip = label),
                       child: Container(
                         margin: EdgeInsets.only(right: r(8)),
-                        padding: EdgeInsets.symmetric(horizontal: r(14), vertical: r(8)),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: r(14),
+                          vertical: r(8),
+                        ),
                         decoration: BoxDecoration(
                           color: selected ? secondary : Colors.white,
                           borderRadius: BorderRadius.circular(r(20)),
@@ -244,7 +328,10 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(height: r(10)),
               Expanded(
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection("trips").orderBy("dateTime").snapshots(),
+                  stream: FirebaseFirestore.instance
+                      .collection("trips")
+                      .orderBy("dateTime")
+                      .snapshots(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
@@ -258,7 +345,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (dt == null) return false;
                       final completed = data["completed"] == true;
                       if (completed) return false;
-                      if (!now.isBefore(dt.add(const Duration(hours: 12)))) return false;
+                      if (!now.isBefore(dt.add(const Duration(hours: 12)))) {
+                        return false;
+                      }
 
                       final isPublicTrip = data["isPublic"] != false;
                       if (isPublicTrip) return true;
@@ -267,16 +356,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (currentUser == null) return false;
                       if (data["ownerId"] == currentUser.uid) return true;
 
-                      final invitedIds = ((data["invitedUserIds"] as List?) ?? const [])
-                          .map((e) => e.toString())
-                          .toSet();
-                      final invitedEmails = ((data["invitedUserEmails"] as List?) ?? const [])
-                          .map((e) => e.toString().trim().toLowerCase())
-                          .toSet();
-                      final currentEmail = (currentUser.email ?? "").trim().toLowerCase();
+                      final invitedIds =
+                          ((data["invitedUserIds"] as List?) ?? const [])
+                              .map((e) => e.toString())
+                              .toSet();
+                      final invitedEmails =
+                          ((data["invitedUserEmails"] as List?) ?? const [])
+                              .map((e) => e.toString().trim().toLowerCase())
+                              .toSet();
+                      final currentEmail = (currentUser.email ?? "")
+                          .trim()
+                          .toLowerCase();
 
                       return invitedIds.contains(currentUser.uid) ||
-                          (currentEmail.isNotEmpty && invitedEmails.contains(currentEmail));
+                          (currentEmail.isNotEmpty &&
+                              invitedEmails.contains(currentEmail));
                     }).toList();
 
                     if (docs.isEmpty) {
@@ -289,7 +383,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       final from = (data["from"] ?? "").toString();
                       final ownerName = (data["ownerName"] ?? "").toString();
 
-                      final matchesChip = selectedChip == "All" || to == selectedChip;
+                      final matchesChip =
+                          selectedChip == "All" || to == selectedChip;
                       if (!matchesChip) return false;
 
                       if (_searchQuery.isEmpty) return true;
@@ -328,7 +423,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     });
 
                     if (filtered.isEmpty) {
-                      return const Center(child: Text("No trips match your search"));
+                      return const Center(
+                        child: Text("No trips match your search"),
+                      );
                     }
 
                     return ListView.builder(
@@ -338,10 +435,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         final doc = filtered[i];
                         final data = doc.data() as Map<String, dynamic>;
 
-                        return TripCard(
-                          tripId: doc.id,
-                          data: data,
-                        );
+                        return TripCard(tripId: doc.id, data: data);
                       },
                     );
                   },
