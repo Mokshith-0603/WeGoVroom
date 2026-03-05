@@ -8,6 +8,7 @@ import '../../feedback/screens/admin_feedbacks_screen.dart';
 import '../../feedback/screens/feedback_form_screen.dart';
 import '../../notifications/screens/admin_notifications_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
+import '../../auth/screens/change_password_screen.dart';
 import '../screens/profile_setup_screen.dart';
 import 'avatar_utils.dart';
 import '../../../utils/responsive.dart';
@@ -62,8 +63,11 @@ class ProfileDrawer extends StatelessWidget {
         .get();
     for (final p in participantSnap.docs) {
       final tripId = p.data()['tripId'] as String?;
-      if (tripId == null || tripId.isEmpty || completedTripIds.contains(tripId))
+      if (tripId == null ||
+          tripId.isEmpty ||
+          completedTripIds.contains(tripId)) {
         continue;
+      }
 
       final tripDoc = await db.collection('trips').doc(tripId).get();
       if (!tripDoc.exists) continue;
@@ -234,6 +238,17 @@ class ProfileDrawer extends StatelessWidget {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => const NotificationsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.lock_reset_outlined),
+                        title: const Text('Change Password'),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const ChangePasswordScreen(),
                             ),
                           );
                         },
