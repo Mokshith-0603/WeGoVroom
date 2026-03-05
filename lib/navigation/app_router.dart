@@ -28,6 +28,10 @@ class AppRouter extends StatelessWidget {
       return const AppHomeScreen();
     }
 
+    if (auth.user != null && !auth.user!.emailVerified) {
+      return const AppHomeScreen();
+    }
+
     final uid = auth.user!.uid;
 
     return FutureBuilder<bool>(

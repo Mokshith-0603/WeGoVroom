@@ -46,24 +46,10 @@ class _StartupSplashScreenState extends State<StartupSplashScreen> {
               ),
             );
           },
-          child: RichText(
-            text: const TextSpan(
-              style: TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
-              ),
-              children: [
-                TextSpan(
-                  text: 'WeGo',
-                  style: TextStyle(color: Color(0xff10111a)),
-                ),
-                TextSpan(
-                  text: 'Vroom',
-                  style: TextStyle(color: Color(0xffff7a00)),
-                ),
-              ],
-            ),
+          child: Image.asset(
+            'lib/assets/images/WeGoVroom_Logo.png',
+            width: 280,
+            fit: BoxFit.contain,
           ),
         ),
       ),

@@ -25,10 +25,26 @@ class AuthProvider extends ChangeNotifier {
         return "Use college email only";
       }
 
-      await _auth.signInWithEmailAndPassword(
+      final cred = await _auth.signInWithEmailAndPassword(
         email: normalizedEmail,
         password: normalizedPassword,
       );
+
+      await cred.user?.reload();
+      final current = _auth.currentUser;
+      if (current != null && !current.emailVerified) {
+        try {
+          await current.sendEmailVerification();
+        } on FirebaseAuthException catch (e) {
+          await _auth.signOut();
+          return e.message ?? "Email not verified. Could not resend verification email.";
+        } catch (_) {
+          await _auth.signOut();
+          return "Email not verified. Could not resend verification email.";
+        }
+        await _auth.signOut();
+        return "Please verify your email first. Verification mail has been sent.";
+      }
 
       notifyListeners();
       return null;
@@ -60,10 +76,17 @@ class AuthProvider extends ChangeNotifier {
         return "Use college email only";
       }
 
-      await _auth.createUserWithEmailAndPassword(
+      final cred = await _auth.createUserWithEmailAndPassword(
         email: normalizedEmail,
         password: normalizedPassword,
       );
+      final createdUser = cred.user;
+      if (createdUser == null) {
+        await _auth.signOut();
+        return "Account created but verification email could not be sent. Please try signing in again.";
+      }
+      await createdUser.sendEmailVerification();
+      await _auth.signOut();
 
       notifyListeners();
       return null;
