@@ -1,4 +1,4 @@
-package com.example.wegovroom
+package com.wegovroom.app
 
 import io.flutter.embedding.android.FlutterActivity
 
