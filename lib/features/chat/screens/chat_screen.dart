@@ -9,10 +9,7 @@ import '../../profile/widgets/avatar_utils.dart';
 class ChatScreen extends StatefulWidget {
   final String? tripId;
 
-  const ChatScreen({
-    super.key,
-    this.tripId,
-  });
+  const ChatScreen({super.key, this.tripId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -91,8 +88,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
     final candidates = <Map<String, dynamic>>[];
 
-    final participantSnap =
-        await db.collection('tripParticipants').where('userId', isEqualTo: uid).get();
+    final participantSnap = await db
+        .collection('tripParticipants')
+        .where('userId', isEqualTo: uid)
+        .get();
 
     for (final p in participantSnap.docs) {
       final tripId = p.data()['tripId'] as String?;
@@ -108,7 +107,10 @@ class _ChatScreenState extends State<ChatScreen> {
       candidates.add({'id': tripId, 'data': data});
     }
 
-    final ownerSnap = await db.collection('trips').where('ownerId', isEqualTo: uid).get();
+    final ownerSnap = await db
+        .collection('trips')
+        .where('ownerId', isEqualTo: uid)
+        .get();
     for (final t in ownerSnap.docs) {
       if (excludeTripId != null && t.id == excludeTripId) continue;
       final data = t.data();
@@ -138,36 +140,77 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _noTrip() {
     final theme = Theme.of(context);
     final r = context.rs;
+    final secondary = theme.colorScheme.secondary;
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Center(
+      body: SafeArea(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              height: r(82),
-              width: r(82),
-              decoration: BoxDecoration(
-                color: const Color(0xfffff2e8),
-                borderRadius: BorderRadius.circular(r(22)),
-              ),
-              child: const Icon(
-                Icons.chat_bubble_outline,
-                color: Color(0xffff7a00),
-                size: 38,
+              color: Colors.black,
+              padding: EdgeInsets.fromLTRB(r(14), r(10), r(14), r(12)),
+              child: Row(
+                children: [
+                  Container(
+                    width: r(34),
+                    height: r(34),
+                    decoration: BoxDecoration(
+                      color: secondary,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.chat,
+                      color: Colors.black,
+                      size: 20,
+                    ),
+                  ),
+                  SizedBox(width: r(10)),
+                  Text(
+                    'Trip Chat',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: r(16),
+                    ),
+                  ),
+                ],
               ),
             ),
-            SizedBox(height: r(14)),
-            Text(
-              'No Active Trip Chat',
-              style: theme.textTheme.headlineMedium?.copyWith(fontSize: r(19)),
-            ),
-            SizedBox(height: r(6)),
-            Text(
-              'Join a trip to start chatting',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[600],
-                fontSize: r(14),
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      height: r(82),
+                      width: r(82),
+                      decoration: BoxDecoration(
+                        color: const Color(0xfffff2e8),
+                        borderRadius: BorderRadius.circular(r(22)),
+                      ),
+                      child: const Icon(
+                        Icons.chat_bubble_outline,
+                        color: Color(0xffff7a00),
+                        size: 38,
+                      ),
+                    ),
+                    SizedBox(height: r(14)),
+                    Text(
+                      'No Active Trip Chat',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontSize: r(19),
+                      ),
+                    ),
+                    SizedBox(height: r(6)),
+                    Text(
+                      'Join a trip to start chatting',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey[600],
+                        fontSize: r(14),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -196,9 +239,9 @@ class _ChatScreenState extends State<ChatScreen> {
       controller.clear();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -213,17 +256,24 @@ class _ChatScreenState extends State<ChatScreen> {
     final senderId = data['senderId']?.toString() ?? '';
     final meta = participantMeta[senderId] ?? const <String, dynamic>{};
 
-    final senderName = (data['senderName'] ?? meta['name'] ?? (mine ? 'You' : 'User')).toString();
-    final avatarIndex = normalizeAvatarIndex(data['senderAvatar'] ?? meta['avatar']);
+    final senderName =
+        (data['senderName'] ?? meta['name'] ?? (mine ? 'You' : 'User'))
+            .toString();
+    final avatarIndex = normalizeAvatarIndex(
+      data['senderAvatar'] ?? meta['avatar'],
+    );
 
     final timestamp = data['createdAt'] as Timestamp?;
-    final time = timestamp != null ? DateFormat('hh:mm a').format(timestamp.toDate()) : '';
+    final time = timestamp != null
+        ? DateFormat('hh:mm a').format(timestamp.toDate())
+        : '';
 
     final bubble = Container(
       margin: EdgeInsets.symmetric(vertical: r(6)),
       padding: EdgeInsets.symmetric(horizontal: r(14), vertical: r(10)),
       constraints: BoxConstraints(
-        maxWidth: MediaQuery.of(context).size.width * (context.isTablet ? 0.5 : 0.68),
+        maxWidth:
+            MediaQuery.of(context).size.width * (context.isTablet ? 0.5 : 0.68),
       ),
       decoration: BoxDecoration(
         color: mine ? secondary : Colors.black,
@@ -411,7 +461,8 @@ class _ChatScreenState extends State<ChatScreen> {
               };
             }
 
-            final tripTitle = '${tripData['from'] ?? ''} -> ${tripData['to'] ?? ''}';
+            final tripTitle =
+                '${tripData['from'] ?? ''} -> ${tripData['to'] ?? ''}';
 
             return Scaffold(
               backgroundColor: Colors.white,
@@ -430,7 +481,11 @@ class _ChatScreenState extends State<ChatScreen> {
                               color: secondary,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.chat, color: Colors.black, size: 20),
+                            child: const Icon(
+                              Icons.chat,
+                              color: Colors.black,
+                              size: 20,
+                            ),
                           ),
                           SizedBox(width: r(10)),
                           Expanded(
@@ -449,7 +504,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                   tripTitle,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: Colors.white70, fontSize: r(12)),
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: r(12),
+                                  ),
                                 ),
                               ],
                             ),
@@ -498,15 +556,21 @@ class _ChatScreenState extends State<ChatScreen> {
                                 .where('tripId', isEqualTo: _effectiveTripId)
                                 .snapshots(),
                             builder: (_, snap) {
-                              if (snap.connectionState == ConnectionState.waiting) {
-                                return const Center(child: CircularProgressIndicator());
+                              if (snap.connectionState ==
+                                  ConnectionState.waiting) {
+                                return const Center(
+                                  child: CircularProgressIndicator(),
+                                );
                               }
 
                               if (!snap.hasData || snap.data!.docs.isEmpty) {
                                 return Center(
                                   child: Text(
                                     'Start the conversation',
-                                    style: TextStyle(color: Colors.grey[700], fontSize: r(15)),
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: r(15),
+                                    ),
                                   ),
                                 );
                               }
@@ -514,9 +578,19 @@ class _ChatScreenState extends State<ChatScreen> {
                               final messageDocs = [...snap.data!.docs]
                                 ..sort((a, b) {
                                   final ta =
-                                      (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+                                      (a.data()
+                                              as Map<
+                                                String,
+                                                dynamic
+                                              >)['createdAt']
+                                          as Timestamp?;
                                   final tb =
-                                      (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+                                      (b.data()
+                                              as Map<
+                                                String,
+                                                dynamic
+                                              >)['createdAt']
+                                          as Timestamp?;
                                   final da = ta?.toDate();
                                   final dbb = tb?.toDate();
                                   if (da == null && dbb == null) return 0;
@@ -526,10 +600,15 @@ class _ChatScreenState extends State<ChatScreen> {
                                 });
 
                               return ListView.builder(
-                                padding: EdgeInsets.symmetric(horizontal: r(12), vertical: r(12)),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: r(12),
+                                  vertical: r(12),
+                                ),
                                 itemCount: messageDocs.length,
                                 itemBuilder: (_, i) {
-                                  final data = messageDocs[i].data() as Map<String, dynamic>;
+                                  final data =
+                                      messageDocs[i].data()
+                                          as Map<String, dynamic>;
                                   final mine = data['senderId'] == uid;
 
                                   return _buildMessageItem(
@@ -567,10 +646,15 @@ class _ChatScreenState extends State<ChatScreen> {
                                 onSubmitted: (_) => send(),
                                 decoration: InputDecoration(
                                   hintText: 'Send a message',
-                                  hintStyle: TextStyle(color: Colors.black54, fontSize: r(14)),
+                                  hintStyle: TextStyle(
+                                    color: Colors.black54,
+                                    fontSize: r(14),
+                                  ),
                                   border: InputBorder.none,
-                                  contentPadding:
-                                      EdgeInsets.symmetric(horizontal: r(18), vertical: r(12)),
+                                  contentPadding: EdgeInsets.symmetric(
+                                    horizontal: r(18),
+                                    vertical: r(12),
+                                  ),
                                 ),
                               ),
                             ),
@@ -590,7 +674,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                             child: IconButton(
                               onPressed: send,
-                              icon: const Icon(Icons.send_rounded, color: Colors.black),
+                              icon: const Icon(
+                                Icons.send_rounded,
+                                color: Colors.black,
+                              ),
                             ),
                           ),
                         ],

@@ -25,9 +25,22 @@ class MyTripsScreen extends StatelessWidget {
         appBar: AppBar(
           backgroundColor: bg,
           elevation: 0,
-          title: Text(
-            "My Trips",
-            style: theme.textTheme.headlineMedium?.copyWith(color: Colors.black),
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "My Trips",
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: Colors.black,
+                ),
+              ),
+              SizedBox(width: context.rs(8)),
+              Icon(
+                Icons.map_outlined,
+                color: Colors.black,
+                size: context.rs(22),
+              ),
+            ],
           ),
           iconTheme: const IconThemeData(color: Colors.black),
           bottom: TabBar(
@@ -124,7 +137,9 @@ class MyTripsScreen extends StatelessWidget {
             SizedBox(height: r(4)),
             Text(
               "Host: ${data["ownerName"] ?? ""}",
-              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[700],
+              ),
             ),
             if (tripDateTime != null) ...[
               SizedBox(height: r(2)),
@@ -148,7 +163,8 @@ class MyTripsScreen extends StatelessWidget {
           .where("ownerId", isEqualTo: uid)
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snap.hasData)
+          return const Center(child: CircularProgressIndicator());
 
         final active = snap.data!.docs
             .where((e) => e.exists && e.data() != null)
@@ -160,7 +176,9 @@ class MyTripsScreen extends StatelessWidget {
           return const Center(child: Text("No active hosted trips"));
         }
 
-        return ListView(children: active.map((d) => _card(context, d)).toList());
+        return ListView(
+          children: active.map((d) => _card(context, d)).toList(),
+        );
       },
     );
   }
@@ -172,7 +190,8 @@ class MyTripsScreen extends StatelessWidget {
           .where("userId", isEqualTo: uid)
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snap.hasData)
+          return const Center(child: CircularProgressIndicator());
 
         final parts = snap.data!.docs;
         if (parts.isEmpty) {
@@ -196,7 +215,9 @@ class MyTripsScreen extends StatelessWidget {
               return const Center(child: Text("No active joined trips"));
             }
 
-            return ListView(children: trips.map((d) => _card(context, d)).toList());
+            return ListView(
+              children: trips.map((d) => _card(context, d)).toList(),
+            );
           },
         );
       },
@@ -211,7 +232,8 @@ class MyTripsScreen extends StatelessWidget {
           .where("status", isEqualTo: "pending")
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snap.hasData)
+          return const Center(child: CircularProgressIndicator());
 
         final reqs = snap.data!.docs;
         if (reqs.isEmpty) {
@@ -230,7 +252,9 @@ class MyTripsScreen extends StatelessWidget {
                 .map((e) => e.data() as Map<String, dynamic>)
                 .toList();
 
-            return ListView(children: trips.map((d) => _card(context, d)).toList());
+            return ListView(
+              children: trips.map((d) => _card(context, d)).toList(),
+            );
           },
         );
       },
@@ -244,7 +268,8 @@ class MyTripsScreen extends StatelessWidget {
           .where("userId", isEqualTo: uid)
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snap.hasData)
+          return const Center(child: CircularProgressIndicator());
         final participantDocs = snap.data!.docs;
 
         return FutureBuilder<List<DocumentSnapshot>>(
@@ -269,10 +294,8 @@ class MyTripsScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => TripDetailScreen(
-                          tripId: doc.id,
-                          data: data,
-                        ),
+                        builder: (_) =>
+                            TripDetailScreen(tripId: doc.id, data: data),
                       ),
                     );
                   },
@@ -293,7 +316,8 @@ class MyTripsScreen extends StatelessWidget {
           .where("userId", isEqualTo: uid)
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snap.hasData)
+          return const Center(child: CircularProgressIndicator());
         final participantDocs = snap.data!.docs;
 
         return FutureBuilder<List<Map<String, dynamic>>>(
@@ -305,7 +329,9 @@ class MyTripsScreen extends StatelessWidget {
 
             final people = peopleSnap.data!;
             if (people.isEmpty) {
-              return const Center(child: Text("No people found from your trips"));
+              return const Center(
+                child: Text("No people found from your trips"),
+              );
             }
 
             return ListView.builder(
@@ -322,7 +348,9 @@ class MyTripsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(r(16)),
-                    boxShadow: const [BoxShadow(blurRadius: 8, color: Colors.black12)],
+                    boxShadow: const [
+                      BoxShadow(blurRadius: 8, color: Colors.black12),
+                    ],
                   ),
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
@@ -350,7 +378,10 @@ class MyTripsScreen extends StatelessWidget {
     List<QueryDocumentSnapshot> participantDocs,
   ) async {
     final db = FirebaseFirestore.instance;
-    final ownerTripsFuture = db.collection("trips").where("ownerId", isEqualTo: uid).get();
+    final ownerTripsFuture = db
+        .collection("trips")
+        .where("ownerId", isEqualTo: uid)
+        .get();
     final joinedTripsFuture = _fetchTrips(participantDocs);
 
     final ownerTrips = await ownerTripsFuture;
@@ -401,12 +432,11 @@ class MyTripsScreen extends StatelessWidget {
       final ownerId = (tripData["ownerId"] ?? "").toString();
       final ownerName = (tripData["ownerName"] ?? "Host").toString();
       if (ownerId.isNotEmpty && ownerId != uid) {
-        final existing = peopleById[ownerId] ?? {
-          "userId": ownerId,
-          "name": ownerName,
-          "tripsTogether": 0,
-        };
-        existing["tripsTogether"] = ((existing["tripsTogether"] ?? 0) as int) + 1;
+        final existing =
+            peopleById[ownerId] ??
+            {"userId": ownerId, "name": ownerName, "tripsTogether": 0};
+        existing["tripsTogether"] =
+            ((existing["tripsTogether"] ?? 0) as int) + 1;
         peopleById[ownerId] = existing;
       }
 
@@ -419,13 +449,17 @@ class MyTripsScreen extends StatelessWidget {
         final userId = (data["userId"] ?? "").toString();
         if (userId.isEmpty || userId == uid) continue;
 
-        final existing = peopleById[userId] ?? {
-          "userId": userId,
-          "name": (data["name"] ?? "User").toString(),
-          "tripsTogether": 0,
-        };
-        existing["name"] = (data["name"] ?? existing["name"] ?? "User").toString();
-        existing["tripsTogether"] = ((existing["tripsTogether"] ?? 0) as int) + 1;
+        final existing =
+            peopleById[userId] ??
+            {
+              "userId": userId,
+              "name": (data["name"] ?? "User").toString(),
+              "tripsTogether": 0,
+            };
+        existing["name"] = (data["name"] ?? existing["name"] ?? "User")
+            .toString();
+        existing["tripsTogether"] =
+            ((existing["tripsTogether"] ?? 0) as int) + 1;
         peopleById[userId] = existing;
       }
     }
@@ -442,7 +476,9 @@ class MyTripsScreen extends StatelessWidget {
     return people;
   }
 
-  Future<List<DocumentSnapshot>> _fetchTrips(List<QueryDocumentSnapshot> source) async {
+  Future<List<DocumentSnapshot>> _fetchTrips(
+    List<QueryDocumentSnapshot> source,
+  ) async {
     final db = FirebaseFirestore.instance;
     final futures = source.map((d) {
       final tripId = d["tripId"];

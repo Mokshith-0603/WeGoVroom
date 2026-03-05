@@ -24,7 +24,9 @@ class _DriversScreenState extends State<DriversScreen> {
     try {
       final doc = await _db.collection('users').doc(user.uid).get();
       final data = doc.data() ?? const <String, dynamic>{};
-      final name = (data['displayName'] ?? data['name'] ?? '').toString().trim();
+      final name = (data['displayName'] ?? data['name'] ?? '')
+          .toString()
+          .trim();
       if (name.isNotEmpty) return name;
     } catch (_) {}
     return user.email?.split('@').first ?? 'User';
@@ -45,12 +47,23 @@ class _DriversScreenState extends State<DriversScreen> {
           child: SizedBox(
             height: MediaQuery.of(context).size.height * 0.72,
             child: StreamBuilder<QuerySnapshot>(
-              stream: _db.collection('driverReviews').where('driverId', isEqualTo: driverId).snapshots(),
+              stream: _db
+                  .collection('driverReviews')
+                  .where('driverId', isEqualTo: driverId)
+                  .snapshots(),
               builder: (_, snap) {
-                final docs = List<QueryDocumentSnapshot>.from(snap.data?.docs ?? const []);
+                final docs = List<QueryDocumentSnapshot>.from(
+                  snap.data?.docs ?? const [],
+                );
                 docs.sort((a, b) {
-                  final ta = ((a.data() as Map<String, dynamic>)['updatedAt'] as Timestamp?)?.toDate();
-                  final tb = ((b.data() as Map<String, dynamic>)['updatedAt'] as Timestamp?)?.toDate();
+                  final ta =
+                      ((a.data() as Map<String, dynamic>)['updatedAt']
+                              as Timestamp?)
+                          ?.toDate();
+                  final tb =
+                      ((b.data() as Map<String, dynamic>)['updatedAt']
+                              as Timestamp?)
+                          ?.toDate();
                   if (ta == null && tb == null) return 0;
                   if (ta == null) return 1;
                   if (tb == null) return -1;
@@ -64,7 +77,10 @@ class _DriversScreenState extends State<DriversScreen> {
                       padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
                       child: Text(
                         '$driverName Reviews',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     Expanded(
@@ -73,32 +89,48 @@ class _DriversScreenState extends State<DriversScreen> {
                           : ListView.builder(
                               itemCount: docs.length,
                               itemBuilder: (_, i) {
-                                final data = docs[i].data() as Map<String, dynamic>;
-                                final reviewerName = (data['reviewerName'] ?? '').toString().trim();
-                                final reviewerId = (data['userId'] ?? '').toString();
-                                final rating = ((data['rating'] ?? 0) as num).toDouble();
-                                final comment = (data['comment'] ?? '').toString();
+                                final data =
+                                    docs[i].data() as Map<String, dynamic>;
+                                final reviewerName =
+                                    (data['reviewerName'] ?? '')
+                                        .toString()
+                                        .trim();
+                                final reviewerId = (data['userId'] ?? '')
+                                    .toString();
+                                final rating = ((data['rating'] ?? 0) as num)
+                                    .toDouble();
+                                final comment = (data['comment'] ?? '')
+                                    .toString();
                                 return ListTile(
                                   leading: const Icon(Icons.person_outline),
                                   title: reviewerName.isNotEmpty
-                                      ? Text('$reviewerName - ${rating.toStringAsFixed(1)}/5')
-                                      : FutureBuilder<DocumentSnapshot>(
+                                      ? Text(
+                                          '$reviewerName - ${rating.toStringAsFixed(1)}/5',
+                                        )
+                                      : FutureBuilder<DocumentSnapshot?>(
                                           future: reviewerId.isEmpty
                                               ? Future.value(null)
-                                              : _db.collection('users').doc(reviewerId).get(),
+                                              : _db
+                                                    .collection('users')
+                                                    .doc(reviewerId)
+                                                    .get(),
                                           builder: (_, userSnap) {
-                                            final userData = userSnap.data?.data()
-                                                as Map<String, dynamic>?;
-                                            final resolvedName = (userData?['displayName'] ??
-                                                    userData?['name'] ??
-                                                    reviewerId)
-                                                .toString();
+                                            final userData =
+                                                userSnap.data?.data()
+                                                    as Map<String, dynamic>?;
+                                            final resolvedName =
+                                                (userData?['displayName'] ??
+                                                        userData?['name'] ??
+                                                        reviewerId)
+                                                    .toString();
                                             return Text(
                                               '$resolvedName - ${rating.toStringAsFixed(1)}/5',
                                             );
                                           },
                                         ),
-                                  subtitle: comment.trim().isEmpty ? const Text('No comment') : Text(comment),
+                                  subtitle: comment.trim().isEmpty
+                                      ? const Text('No comment')
+                                      : Text(comment),
                                 );
                               },
                             ),
@@ -285,7 +317,9 @@ class _DriversScreenState extends State<DriversScreen> {
                 ),
                 TextField(
                   controller: rating,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(labelText: 'Rating'),
                 ),
               ],
@@ -303,9 +337,13 @@ class _DriversScreenState extends State<DriversScreen> {
                 final driverVehicle = vehicle.text.trim();
                 final driverRating = double.tryParse(rating.text.trim()) ?? 4.5;
 
-                if (driverName.isEmpty || driverPhone.isEmpty || driverVehicle.isEmpty) {
+                if (driverName.isEmpty ||
+                    driverPhone.isEmpty ||
+                    driverVehicle.isEmpty) {
                   ScaffoldMessenger.of(this.context).showSnackBar(
-                    const SnackBar(content: Text('Please fill all required fields')),
+                    const SnackBar(
+                      content: Text('Please fill all required fields'),
+                    ),
                   );
                   return;
                 }
@@ -340,10 +378,18 @@ class _DriversScreenState extends State<DriversScreen> {
     String driverId,
     Map<String, dynamic> driverData,
   ) async {
-    final name = TextEditingController(text: (driverData['name'] ?? '').toString());
-    final phone = TextEditingController(text: (driverData['phone'] ?? '').toString());
-    final vehicle = TextEditingController(text: (driverData['vehicle'] ?? '').toString());
-    final rating = TextEditingController(text: (driverData['rating'] ?? 4.5).toString());
+    final name = TextEditingController(
+      text: (driverData['name'] ?? '').toString(),
+    );
+    final phone = TextEditingController(
+      text: (driverData['phone'] ?? '').toString(),
+    );
+    final vehicle = TextEditingController(
+      text: (driverData['vehicle'] ?? '').toString(),
+    );
+    final rating = TextEditingController(
+      text: (driverData['rating'] ?? 4.5).toString(),
+    );
 
     await showDialog(
       context: context,
@@ -369,7 +415,9 @@ class _DriversScreenState extends State<DriversScreen> {
                 ),
                 TextField(
                   controller: rating,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   decoration: const InputDecoration(labelText: 'Rating'),
                 ),
               ],
@@ -387,9 +435,13 @@ class _DriversScreenState extends State<DriversScreen> {
                 final driverVehicle = vehicle.text.trim();
                 final driverRating = double.tryParse(rating.text.trim()) ?? 4.5;
 
-                if (driverName.isEmpty || driverPhone.isEmpty || driverVehicle.isEmpty) {
+                if (driverName.isEmpty ||
+                    driverPhone.isEmpty ||
+                    driverVehicle.isEmpty) {
                   ScaffoldMessenger.of(this.context).showSnackBar(
-                    const SnackBar(content: Text('Please fill all required fields')),
+                    const SnackBar(
+                      content: Text('Please fill all required fields'),
+                    ),
                   );
                   return;
                 }
@@ -446,14 +498,14 @@ class _DriversScreenState extends State<DriversScreen> {
     try {
       await _db.collection('drivers').doc(driverId).delete();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Driver deleted')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Driver deleted')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete driver: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to delete driver: $e')));
     }
   }
 
@@ -496,13 +548,18 @@ class _DriversScreenState extends State<DriversScreen> {
               children: [
                 Text(
                   name,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: r(16)),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: r(16),
+                  ),
                 ),
                 Text(vehicle, style: const TextStyle(color: Colors.grey)),
                 SizedBox(height: r(4)),
                 Text(
                   'Phone: $phone',
-                  style: theme.textTheme.bodyMedium?.copyWith(color: Colors.grey[800]),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[800],
+                  ),
                 ),
                 SizedBox(height: r(4)),
                 StreamBuilder<QuerySnapshot>(
@@ -522,7 +579,8 @@ class _DriversScreenState extends State<DriversScreen> {
                       double total = 0;
                       for (final doc in docs) {
                         final data = doc.data() as Map<String, dynamic>;
-                        final ratingValue = ((data['rating'] ?? 0) as num).toDouble();
+                        final ratingValue = ((data['rating'] ?? 0) as num)
+                            .toDouble();
                         total += ratingValue;
                         if (uid != null && data['userId'] == uid) {
                           myRating = ratingValue;
@@ -539,7 +597,9 @@ class _DriversScreenState extends State<DriversScreen> {
                         Row(
                           children: [
                             Icon(Icons.star, size: r(16), color: secondary),
-                            Text('${avg.toStringAsFixed(1)} (${count > 0 ? count : '0'} reviews)'),
+                            Text(
+                              '${avg.toStringAsFixed(1)} (${count > 0 ? count : '0'} reviews)',
+                            ),
                           ],
                         ),
                         SizedBox(height: r(6)),
@@ -560,13 +620,15 @@ class _DriversScreenState extends State<DriversScreen> {
                           onPressed: uid == null
                               ? null
                               : () => _openDriverReviewDialog(
-                                    driverId: driverId,
-                                    driverName: name.toString(),
-                                    initialRating: myRating,
-                                    initialComment: myComment,
-                                  ),
+                                  driverId: driverId,
+                                  driverName: name.toString(),
+                                  initialRating: myRating,
+                                  initialComment: myComment,
+                                ),
                           icon: const Icon(Icons.rate_review_outlined),
-                          label: Text(myRating == null ? 'Rate/Review' : 'Edit Review'),
+                          label: Text(
+                            myRating == null ? 'Rate/Review' : 'Edit Review',
+                          ),
                           style: TextButton.styleFrom(
                             padding: EdgeInsets.zero,
                             minimumSize: Size(0, r(28)),
@@ -637,9 +699,9 @@ class _DriversScreenState extends State<DriversScreen> {
               padding: EdgeInsets.fromLTRB(r(16), r(12), r(16), r(8)),
               child: Text(
                 'Best drivers who take you at the best price.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[700],
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
               ),
             ),
             Expanded(
@@ -667,9 +729,22 @@ class _DriversScreenState extends State<DriversScreen> {
     return Scaffold(
       backgroundColor: bg,
       appBar: AppBar(
-        title: Text(
-          'Drivers',
-          style: theme.textTheme.headlineMedium?.copyWith(color: Colors.black),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Drivers',
+              style: theme.textTheme.headlineMedium?.copyWith(
+                color: Colors.black,
+              ),
+            ),
+            SizedBox(width: context.rs(8)),
+            Icon(
+              Icons.directions_car_outlined,
+              color: Colors.black,
+              size: context.rs(22),
+            ),
+          ],
         ),
         backgroundColor: bg,
         elevation: 0,

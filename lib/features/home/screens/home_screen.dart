@@ -234,7 +234,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   .toString();
                               if (name.isEmpty) return const SizedBox.shrink();
                               return Text(
-                                'Hi $name',
+                                'Hi 👋 $name',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: r(16),
@@ -257,7 +257,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     RichText(
                       text: TextSpan(
-                        style: theme.textTheme.headlineMedium,
+                        style: TextStyle(
+                          fontSize: r(20),
+                          fontWeight: FontWeight.w700,
+                        ),
                         children: [
                           const TextSpan(
                             text: 'WeGo',
