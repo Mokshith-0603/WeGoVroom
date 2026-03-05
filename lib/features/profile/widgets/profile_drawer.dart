@@ -27,7 +27,9 @@ class ProfileDrawer extends StatelessWidget {
 
   bool _isAdmin(Map<String, dynamic> data) {
     final role = data['role']?.toString().trim().toLowerCase();
-    return role == 'admin' || _parseBool(data['isAdmin']) || _parseBool(data['admin']);
+    return role == 'admin' ||
+        _parseBool(data['isAdmin']) ||
+        _parseBool(data['admin']);
   }
 
   Future<int> _completedTripCount(String? uid) async {
@@ -37,24 +39,31 @@ class ProfileDrawer extends StatelessWidget {
     final completedTripIds = <String>{};
     final now = DateTime.now();
 
-    final ownedSnap = await db.collection('trips').where('ownerId', isEqualTo: uid).get();
+    final ownedSnap = await db
+        .collection('trips')
+        .where('ownerId', isEqualTo: uid)
+        .get();
     for (final doc in ownedSnap.docs) {
       final data = doc.data();
       DateTime? dt;
       try {
         dt = (data['dateTime'] as Timestamp?)?.toDate();
       } catch (_) {}
-      final autoEnded = dt != null && !now.isBefore(dt.add(const Duration(hours: 12)));
+      final autoEnded =
+          dt != null && !now.isBefore(dt.add(const Duration(hours: 12)));
       if (data['completed'] == true || autoEnded) {
         completedTripIds.add(doc.id);
       }
     }
 
-    final participantSnap =
-        await db.collection('tripParticipants').where('userId', isEqualTo: uid).get();
+    final participantSnap = await db
+        .collection('tripParticipants')
+        .where('userId', isEqualTo: uid)
+        .get();
     for (final p in participantSnap.docs) {
       final tripId = p.data()['tripId'] as String?;
-      if (tripId == null || tripId.isEmpty || completedTripIds.contains(tripId)) continue;
+      if (tripId == null || tripId.isEmpty || completedTripIds.contains(tripId))
+        continue;
 
       final tripDoc = await db.collection('trips').doc(tripId).get();
       if (!tripDoc.exists) continue;
@@ -63,7 +72,8 @@ class ProfileDrawer extends StatelessWidget {
       try {
         dt = (tripData['dateTime'] as Timestamp?)?.toDate();
       } catch (_) {}
-      final autoEnded = dt != null && !now.isBefore(dt.add(const Duration(hours: 12)));
+      final autoEnded =
+          dt != null && !now.isBefore(dt.add(const Duration(hours: 12)));
       if (tripData['completed'] == true || autoEnded) {
         completedTripIds.add(tripId);
       }
@@ -74,10 +84,7 @@ class ProfileDrawer extends StatelessWidget {
 
   Future<Map<String, dynamic>> _reviewSummary(String? uid) async {
     if (uid == null) {
-      return {
-        'count': 0,
-        'avg': 0.0,
-      };
+      return {'count': 0, 'avg': 0.0};
     }
 
     final snap = await FirebaseFirestore.instance
@@ -87,10 +94,7 @@ class ProfileDrawer extends StatelessWidget {
 
     final docs = snap.docs;
     if (docs.isEmpty) {
-      return {
-        'count': 0,
-        'avg': 0.0,
-      };
+      return {'count': 0, 'avg': 0.0};
     }
 
     double total = 0;
@@ -99,10 +103,7 @@ class ProfileDrawer extends StatelessWidget {
       total += ((data['rating'] ?? 0) as num).toDouble();
     }
 
-    return {
-      'count': docs.length,
-      'avg': total / docs.length,
-    };
+    return {'count': docs.length, 'avg': total / docs.length};
   }
 
   Future<Map<String, dynamic>> _profileStats(String? uid) async {
@@ -125,14 +126,18 @@ class ProfileDrawer extends StatelessWidget {
     return Drawer(
       child: SafeArea(
         child: FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance.collection('users').doc(user?.uid).get(),
+          future: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user?.uid)
+              .get(),
           builder: (_, snap) {
             Map<String, dynamic> data = {};
             if (snap.hasData && snap.data!.exists) {
               data = snap.data!.data() as Map<String, dynamic>;
             }
 
-            final name = data['displayName'] ?? user?.email?.split('@')[0] ?? 'User';
+            final name =
+                data['displayName'] ?? user?.email?.split('@')[0] ?? 'User';
 
             final email = user?.email ?? '';
             final reg = data['register'] ?? '';
@@ -144,8 +149,10 @@ class ProfileDrawer extends StatelessWidget {
               builder: (context, statsSnap) {
                 final stats = statsSnap.data ?? const <String, dynamic>{};
                 final completedTrips = (stats['trips'] ?? 0) as int;
-                final review = (stats['review'] ??
-                    const <String, dynamic>{'count': 0, 'avg': 0.0}) as Map<String, dynamic>;
+                final review =
+                    (stats['review'] ??
+                            const <String, dynamic>{'count': 0, 'avg': 0.0})
+                        as Map<String, dynamic>;
                 final reviewCount = (review['count'] ?? 0) as int;
                 final avgRating = ((review['avg'] ?? 0.0) as num).toDouble();
 
@@ -154,7 +161,10 @@ class ProfileDrawer extends StatelessWidget {
                     children: [
                       Container(
                         width: double.infinity,
-                        padding: EdgeInsets.symmetric(horizontal: r(20), vertical: r(24)),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: r(20),
+                          vertical: r(24),
+                        ),
                         decoration: const BoxDecoration(
                           color: Color(0xffff7a00),
                         ),
@@ -166,15 +176,21 @@ class ProfileDrawer extends StatelessWidget {
                             Text(
                               name.toString().toUpperCase(),
                               style: TextStyle(
-                                color: Colors.white,
+                                color: Colors.black,
                                 fontWeight: FontWeight.bold,
                                 fontSize: r(18),
                               ),
                             ),
                             SizedBox(height: r(4)),
-                            Text(email, style: const TextStyle(color: Colors.white70)),
+                            Text(
+                              email,
+                              style: const TextStyle(color: Colors.black87),
+                            ),
                             if (reg.toString().isNotEmpty)
-                              Text('Reg: $reg', style: const TextStyle(color: Colors.white70)),
+                              Text(
+                                'Reg: $reg',
+                                style: const TextStyle(color: Colors.black87),
+                              ),
                           ],
                         ),
                       ),
@@ -193,7 +209,8 @@ class ProfileDrawer extends StatelessWidget {
                               child: _StatCard(
                                 title: 'Reviews Got',
                                 value: reviewCount.toString(),
-                                subtitle: '${avgRating.toStringAsFixed(1)}/5 avg',
+                                subtitle:
+                                    '${avgRating.toStringAsFixed(1)}/5 avg',
                               ),
                             ),
                           ],
@@ -250,7 +267,8 @@ class ProfileDrawer extends StatelessWidget {
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (_) => const AdminNotificationsScreen(),
+                                builder: (_) =>
+                                    const AdminNotificationsScreen(),
                               ),
                             );
                           },
@@ -296,11 +314,7 @@ class _StatCard extends StatelessWidget {
   final String value;
   final String? subtitle;
 
-  const _StatCard({
-    required this.title,
-    required this.value,
-    this.subtitle,
-  });
+  const _StatCard({required this.title, required this.value, this.subtitle});
 
   @override
   Widget build(BuildContext context) {
