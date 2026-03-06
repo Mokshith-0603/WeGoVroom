@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../utils/responsive.dart';
 import '../../../utils/transport_icons.dart';
+import 'manage_requests_screen.dart';
 import 'trip_detail_screen.dart';
 
 class MyTripsScreen extends StatelessWidget {
@@ -97,8 +98,10 @@ class MyTripsScreen extends StatelessWidget {
 
   Widget _card(
     BuildContext context,
+    String tripId,
     Map<String, dynamic> data, {
     VoidCallback? onTap,
+    bool showHostActions = false,
   }) {
     final theme = Theme.of(context);
     final secondary = theme.colorScheme.secondary;
@@ -108,7 +111,16 @@ class MyTripsScreen extends StatelessWidget {
 
     return InkWell(
       borderRadius: BorderRadius.circular(r(18)),
-      onTap: onTap,
+      onTap:
+          onTap ??
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TripDetailScreen(tripId: tripId, data: data),
+              ),
+            );
+          },
       child: Container(
         margin: EdgeInsets.symmetric(horizontal: r(16), vertical: r(8)),
         padding: EdgeInsets.all(r(16)),
@@ -150,6 +162,40 @@ class MyTripsScreen extends StatelessWidget {
                 ),
               ),
             ],
+            if (showHostActions) ...[
+              SizedBox(height: r(10)),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ManageRequestsScreen(tripId: tripId),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.person_search),
+                    label: const Text("Manage Requests"),
+                  ),
+                  SizedBox(width: r(10)),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection("tripRequests")
+                        .where("tripId", isEqualTo: tripId)
+                        .where("status", isEqualTo: "pending")
+                        .snapshots(),
+                    builder: (_, reqSnap) {
+                      final count = reqSnap.data?.docs.length ?? 0;
+                      return Chip(
+                        avatar: const Icon(Icons.pending_actions, size: 16),
+                        label: Text("$count pending"),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -168,8 +214,7 @@ class MyTripsScreen extends StatelessWidget {
 
         final active = snap.data!.docs
             .where((e) => e.exists && e.data() != null)
-            .map((e) => e.data() as Map<String, dynamic>)
-            .where(isActive)
+            .where((e) => isActive(e.data() as Map<String, dynamic>))
             .toList();
 
         if (active.isEmpty) {
@@ -177,7 +222,10 @@ class MyTripsScreen extends StatelessWidget {
         }
 
         return ListView(
-          children: active.map((d) => _card(context, d)).toList(),
+          children: active.map((doc) {
+            final d = doc.data() as Map<String, dynamic>;
+            return _card(context, doc.id, d, showHostActions: true);
+          }).toList(),
         );
       },
     );
@@ -207,8 +255,7 @@ class MyTripsScreen extends StatelessWidget {
 
             final trips = tripSnap.data!
                 .where((e) => e.exists && e.data() != null)
-                .map((e) => e.data() as Map<String, dynamic>)
-                .where(isActive)
+                .where((e) => isActive(e.data() as Map<String, dynamic>))
                 .toList();
 
             if (trips.isEmpty) {
@@ -216,7 +263,10 @@ class MyTripsScreen extends StatelessWidget {
             }
 
             return ListView(
-              children: trips.map((d) => _card(context, d)).toList(),
+              children: trips.map((doc) {
+                final d = doc.data() as Map<String, dynamic>;
+                return _card(context, doc.id, d);
+              }).toList(),
             );
           },
         );
@@ -249,11 +299,13 @@ class MyTripsScreen extends StatelessWidget {
 
             final trips = tripSnap.data!
                 .where((s) => s.exists && s.data() != null)
-                .map((e) => e.data() as Map<String, dynamic>)
                 .toList();
 
             return ListView(
-              children: trips.map((d) => _card(context, d)).toList(),
+              children: trips.map((doc) {
+                final d = doc.data() as Map<String, dynamic>;
+                return _card(context, doc.id, d);
+              }).toList(),
             );
           },
         );
@@ -289,6 +341,7 @@ class MyTripsScreen extends StatelessWidget {
                 final data = doc.data() as Map<String, dynamic>;
                 return _card(
                   context,
+                  doc.id,
                   data,
                   onTap: () {
                     Navigator.push(

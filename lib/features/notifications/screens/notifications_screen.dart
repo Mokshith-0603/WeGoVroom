@@ -22,10 +22,17 @@ class NotificationsScreen extends StatelessWidget {
         .snapshots();
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xfff5f5f7).withValues(alpha: 0.94),
       appBar: AppBar(
-        title: const Text('Notifications'),
-        backgroundColor: Colors.white,
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Notifications'),
+            SizedBox(width: 8),
+            Icon(Icons.notifications_active, color: accent, size: 20),
+          ],
+        ),
+        backgroundColor: Colors.transparent,
         foregroundColor: Colors.black,
         elevation: 0,
       ),
@@ -63,9 +70,12 @@ class NotificationsScreen extends StatelessWidget {
             );
           }
 
-          final docs = [...snap.data!.docs]..sort((a, b) {
-              final da = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-              final db = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+          final docs = [...snap.data!.docs]
+            ..sort((a, b) {
+              final da =
+                  (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+              final db =
+                  (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
               final ta = da?.toDate();
               final tb = db?.toDate();
               if (ta == null && tb == null) return 0;
@@ -88,9 +98,16 @@ class NotificationsScreen extends StatelessWidget {
 
               return Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Colors.white.withValues(alpha: 0.78),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: const Color(0xffffd3b0)),
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 8,
+                      color: Colors.black12,
+                      offset: Offset(0, 3),
+                    ),
+                  ],
                 ),
                 child: ListTile(
                   leading: const CircleAvatar(
@@ -99,7 +116,10 @@ class NotificationsScreen extends StatelessWidget {
                   ),
                   title: Text(
                     message,
-                    style: const TextStyle(color: Colors.black, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   subtitle: timeText.isNotEmpty
                       ? Text(
@@ -116,4 +136,3 @@ class NotificationsScreen extends StatelessWidget {
     );
   }
 }
-

@@ -160,15 +160,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       return;
     }
 
-    if (!isPublic && _selectedInviteeIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Select at least one invitee for a private trip"),
-        ),
-      );
-      return;
-    }
-
     setState(() => loading = true);
 
     try {
@@ -176,6 +167,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       final active = await hasActiveTrip(user.uid);
 
       if (active) {
+        if (!mounted) return;
         setState(() => loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("You already have an active trip")),
@@ -229,11 +221,21 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         "createdAt": FieldValue.serverTimestamp(),
       });
 
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      Navigator.pop(context);
+      return;
     } catch (e) {
       debugPrint(e.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Could not create trip. Please try again."),
+          ),
+        );
+      }
     }
 
+    if (!mounted) return;
     setState(() => loading = false);
   }
 
@@ -354,7 +356,16 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
     final user = fb.FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Create Trip")),
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Text("Create Trip"),
+            SizedBox(width: 8),
+            Icon(Icons.add_road, color: Color(0xffff7a00), size: 20),
+          ],
+        ),
+      ),
       backgroundColor: const Color(0xfff7f7f7),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -402,28 +413,45 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             section(
               "When",
               Icons.calendar_today_outlined,
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: pickDate,
-                      child: Text(
-                        selectedDate == null
-                            ? "Select date *"
-                            : selectedDate.toString().split(" ")[0],
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      "(Departure date & time)",
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: pickTime,
-                      child: Text(
-                        selectedTime == null
-                            ? "Select time *"
-                            : selectedTime!.format(context),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: pickDate,
+                          child: Text(
+                            selectedDate == null
+                                ? "Select date *"
+                                : selectedDate.toString().split(" ")[0],
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: pickTime,
+                          child: Text(
+                            selectedTime == null
+                                ? "Select time *"
+                                : selectedTime!.format(context),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -467,21 +495,25 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               "Visibility",
               Icons.visibility_outlined,
               SwitchListTile(
-                value: isPublic,
+                value: !isPublic,
                 onChanged: (v) => setState(() {
-                  isPublic = v;
+                  isPublic = !v;
                   if (isPublic) {
                     _selectedInviteeIds.clear();
                     _selectedInviteeNames.clear();
                   }
                 }),
-                title: const Text("Public trip"),
-                subtitle: const Text("Anyone can join instantly"),
+                title: const Text("Enable private trip"),
+                subtitle: Text(
+                  isPublic
+                      ? "(if button is disabled it is a public trip)"
+                      : "(People must send request to join)",
+                ),
               ),
             ),
             if (!isPublic)
               section(
-                "Invite People",
+                "Invite People (Optional)",
                 Icons.person_add_alt_1_outlined,
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -525,7 +557,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             SizedBox(
               width: double.infinity,
               height: 56,
-              child: ElevatedButton(
+              child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xffff7a00),
                   shape: RoundedRectangleBorder(
@@ -533,10 +565,26 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                   ),
                 ),
                 onPressed: loading ? null : createTrip,
-                child: loading
-                    ? const CircularProgressIndicator(color: Colors.white)
+                icon: loading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.rocket_launch, color: Color(0xff1a1a1a)),
+                label: loading
+                    ? const Text(
+                        "Creating Trip...",
+                        style: TextStyle(
+                          color: Color(0xff1a1a1a),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      )
                     : const Text(
-                        "Create Trip 🚀",
+                        "Create Trip",
                         style: TextStyle(
                           color: Color(0xff1a1a1a),
                           fontWeight: FontWeight.w700,

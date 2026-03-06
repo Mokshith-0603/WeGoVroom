@@ -10,9 +10,24 @@ import 'main_navigation.dart';
 class AppRouter extends StatelessWidget {
   const AppRouter({super.key});
 
+  String? _tripIdFromUri(Uri uri) {
+    final fromQuery = uri.queryParameters["tripId"];
+    if (fromQuery != null && fromQuery.isNotEmpty) return fromQuery;
+
+    final fragment = uri.fragment;
+    if (fragment.isEmpty) return null;
+    final queryStart = fragment.indexOf("?");
+    if (queryStart == -1) return null;
+    final query = fragment.substring(queryStart + 1);
+    return Uri.splitQueryString(query)["tripId"];
+  }
+
   Future<bool> _profileDone(String uid) async {
     try {
-      final doc = await FirebaseFirestore.instance.collection("users").doc(uid).get();
+      final doc = await FirebaseFirestore.instance
+          .collection("users")
+          .doc(uid)
+          .get();
       return doc.exists;
     } catch (e) {
       debugPrint("Profile check error: $e");
@@ -54,7 +69,8 @@ class AppRouter extends StatelessWidget {
           return const ProfileSetupScreen();
         }
 
-        return const MainNavigation();
+        final deepTripId = _tripIdFromUri(Uri.base);
+        return MainNavigation(initialTripId: deepTripId);
       },
     );
   }
