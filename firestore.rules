@@ -116,7 +116,7 @@ service cloud.firestore {
       allow create: if signedIn() && 
                        request.resource.data.ownerId == request.auth.uid;
       allow update, delete: if signedIn() && 
-                               resource.data.ownerId == request.auth.uid;
+                               (resource.data.ownerId == request.auth.uid || isAdmin());
     }
 
     // Trip participants

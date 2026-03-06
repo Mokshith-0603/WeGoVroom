@@ -43,7 +43,9 @@ class AppRouter extends StatelessWidget {
       return const AppHomeScreen();
     }
 
-    if (auth.user != null && !auth.user!.emailVerified) {
+    if (auth.user != null &&
+        !auth.user!.emailVerified &&
+        !auth.shouldBypassVerificationForCurrentUser) {
       return const AppHomeScreen();
     }
 

@@ -3,10 +3,17 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  static const String adminEmail = "admin@vitapstudent.ac.in";
 
   User? get user => _auth.currentUser;
 
   bool get isLoggedIn => user != null;
+
+  bool isAdminEmail(String? email) {
+    return email?.trim().toLowerCase() == adminEmail;
+  }
+
+  bool get shouldBypassVerificationForCurrentUser => isAdminEmail(user?.email);
 
   /// Allow college domains
   bool _isCollegeEmail(String email) {
@@ -32,7 +39,9 @@ class AuthProvider extends ChangeNotifier {
 
       await cred.user?.reload();
       final current = _auth.currentUser;
-      if (current != null && !current.emailVerified) {
+      if (current != null &&
+          !current.emailVerified &&
+          !isAdminEmail(current.email)) {
         try {
           await current.sendEmailVerification();
         } on FirebaseAuthException catch (e) {
@@ -86,8 +95,10 @@ class AuthProvider extends ChangeNotifier {
         await _auth.signOut();
         return "Account created but verification email could not be sent. Please try signing in again.";
       }
-      await createdUser.sendEmailVerification();
-      await _auth.signOut();
+      if (!isAdminEmail(createdUser.email)) {
+        await createdUser.sendEmailVerification();
+        await _auth.signOut();
+      }
 
       notifyListeners();
       return null;

@@ -661,8 +661,30 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }
 
   Future<void> deleteTrip() async {
-    await db.collection("trips").doc(widget.tripId).delete();
-    if (mounted) Navigator.pop(context);
+    final user = context.read<AuthProvider>().user;
+    final ownerId = (widget.data["ownerId"] ?? "").toString();
+    final isAdmin = context.read<AuthProvider>().isAdminEmail(user?.email);
+    final canDeleteTrip = user != null && (user.uid == ownerId || isAdmin);
+
+    if (!canDeleteTrip) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("You cannot delete this trip")));
+      }
+      return;
+    }
+
+    try {
+      await db.collection("trips").doc(widget.tripId).delete();
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Failed to delete trip: $e")));
+      }
+    }
   }
 
   DateTime? _parseTripDateTime(dynamic value) {
@@ -1342,7 +1364,10 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         }
 
         final d = snap.data!.data() as Map<String, dynamic>;
+        final auth = context.read<AuthProvider>();
         final isCreator = user != null && user.uid == d["ownerId"];
+        final isAdmin = auth.isAdminEmail(user?.email);
+        final canDeleteTrip = isCreator || isAdmin;
 
         final joined = d["joined"] ?? 1;
         final max = d["maxPeople"] ?? 4;
@@ -1431,7 +1456,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                             ),
                             onPressed: () => _openEditTripDialog(d),
                           ),
-                        if (isCreator)
+                        if (canDeleteTrip)
                           IconButton(
                             icon: const Icon(Icons.delete, color: Colors.red),
                             onPressed: deleteTrip,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../navigation/app_router.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../utils/responsive.dart';
 import 'landing_screen.dart';
@@ -21,6 +22,8 @@ class _SignupScreenState extends State<SignupScreen> {
   bool _showConfirmPassword = false;
 
   Future<void> create() async {
+    final signupEmail = email.text.trim();
+
     if (pass.text != confirm.text) {
       ScaffoldMessenger.of(
         context,
@@ -31,7 +34,7 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() => loading = true);
 
     final auth = context.read<AuthProvider>();
-    final error = await auth.signUp(email.text.trim(), pass.text.trim());
+    final error = await auth.signUp(signupEmail, pass.text.trim());
 
     setState(() => loading = false);
 
@@ -43,6 +46,14 @@ class _SignupScreenState extends State<SignupScreen> {
     }
 
     if (!mounted) return;
+
+    if (auth.isAdminEmail(signupEmail)) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const AppRouter()),
+      );
+      return;
+    }
 
     await showDialog(
       context: context,

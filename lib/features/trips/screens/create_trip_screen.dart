@@ -511,48 +511,6 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 ),
               ),
             ),
-            if (!isPublic)
-              section(
-                "Invite People (Optional)",
-                Icons.person_add_alt_1_outlined,
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _selectedInviteeIds.isEmpty
-                          ? "No invitees selected"
-                          : "${_selectedInviteeIds.length} invitee(s) selected",
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      onPressed: user == null
-                          ? null
-                          : () => _pickInvitees(user.uid),
-                      icon: const Icon(Icons.group_add_outlined),
-                      label: const Text("Choose Invitees"),
-                    ),
-                    if (_selectedInviteeNames.isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _selectedInviteeIds.map((uid) {
-                          final label = _selectedInviteeNames[uid] ?? "User";
-                          return Chip(
-                            label: Text(label),
-                            onDeleted: () {
-                              setState(() {
-                                _selectedInviteeIds.remove(uid);
-                                _selectedInviteeNames.remove(uid);
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
