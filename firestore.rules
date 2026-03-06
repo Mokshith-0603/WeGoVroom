@@ -138,8 +138,41 @@ service cloud.firestore {
 
     // Trip requests/join requests
     match /tripRequests/{request} {
-      allow read, list: if signedIn();
-      allow create, write, delete: if signedIn();
+      allow read, list: if signedIn() && (
+        resource.data.userId == uid()
+        || isTripOwner(resource.data.tripId)
+        || isAdmin()
+      );
+
+      allow create: if signedIn()
+        && request.resource.data.tripId is string
+        && tripExists(request.resource.data.tripId)
+        && request.resource.data.userId == uid()
+        && uid() != tripOwnerId(request.resource.data.tripId)
+        && (
+          !request.resource.data.keys().hasAny(["hostId"])
+          || (
+            request.resource.data.hostId is string
+            && request.resource.data.hostId == tripOwnerId(request.resource.data.tripId)
+          )
+        )
+        && request.resource.data.status == "pending";
+
+      allow update: if signedIn()
+        && isTripOwner(resource.data.tripId)
+        && resource.data.status == "pending"
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.userId == resource.data.userId
+        && (
+          !resource.data.keys().hasAny(["hostId"])
+          || request.resource.data.hostId == resource.data.hostId
+        )
+        && (
+          request.resource.data.status == "approved"
+          || request.resource.data.status == "rejected"
+        );
+
+      allow delete: if false;
     }
 
     // Trip chat messages

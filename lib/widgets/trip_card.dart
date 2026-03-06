@@ -8,11 +8,7 @@ class TripCard extends StatelessWidget {
   final String tripId;
   final Map<String, dynamic> data;
 
-  const TripCard({
-    super.key,
-    required this.tripId,
-    required this.data,
-  });
+  const TripCard({super.key, required this.tripId, required this.data});
 
   @override
   Widget build(BuildContext context) {
@@ -29,11 +25,20 @@ class TripCard extends StatelessWidget {
     } catch (_) {}
 
     final dateText = dt != null ? "${dt.day}/${dt.month}/${dt.year}" : "";
-    final timeText = dt != null ? TimeOfDay.fromDateTime(dt).format(context) : "";
+    final timeText = dt != null
+        ? TimeOfDay.fromDateTime(dt).format(context)
+        : "";
 
     final theme = Theme.of(context);
     final secondary = theme.colorScheme.secondary;
     final r = context.rs;
+    final now = DateTime.now();
+    final completed = data["completed"] == true;
+    final isOngoing =
+        dt != null &&
+        !completed &&
+        !now.isBefore(dt) &&
+        now.isBefore(dt.add(const Duration(hours: 12)));
 
     return InkWell(
       borderRadius: BorderRadius.circular(r(20)),
@@ -41,10 +46,7 @@ class TripCard extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => TripDetailScreen(
-              tripId: tripId,
-              data: data,
-            ),
+            builder: (_) => TripDetailScreen(tripId: tripId, data: data),
           ),
         );
       },
@@ -81,9 +83,61 @@ class TripCard extends StatelessWidget {
               ],
             ),
             SizedBox(height: r(8)),
+            Wrap(
+              spacing: r(8),
+              runSpacing: r(8),
+              children: [
+                Container(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: r(10),
+                    vertical: r(4),
+                  ),
+                  decoration: BoxDecoration(
+                    color: isPublic
+                        ? Colors.blue.withValues(alpha: 0.12)
+                        : Colors.deepPurple.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(r(20)),
+                  ),
+                  child: Text(
+                    isPublic ? "Public trip" : "Private trip",
+                    style: TextStyle(
+                      color: isPublic
+                          ? Colors.blue[800]
+                          : Colors.deepPurple[700],
+                      fontWeight: FontWeight.w600,
+                      fontSize: r(12),
+                    ),
+                  ),
+                ),
+                if (isOngoing)
+                  Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: r(10),
+                      vertical: r(4),
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(r(20)),
+                    ),
+                    child: Text(
+                      "Ongoing trip",
+                      style: TextStyle(
+                        color: Colors.orange[900],
+                        fontWeight: FontWeight.w700,
+                        fontSize: r(12),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            SizedBox(height: r(8)),
             Row(
               children: [
-                Icon(Icons.calendar_today, size: r(16), color: Colors.grey[700]),
+                Icon(
+                  Icons.calendar_today,
+                  size: r(16),
+                  color: Colors.grey[700],
+                ),
                 SizedBox(width: r(6)),
                 Text(dateText),
                 SizedBox(width: r(12)),
@@ -91,7 +145,11 @@ class TripCard extends StatelessWidget {
                 SizedBox(width: r(4)),
                 Text(timeText),
                 const Spacer(),
-                Icon(Icons.currency_rupee, size: r(16), color: Colors.green[700]),
+                Icon(
+                  Icons.currency_rupee,
+                  size: r(16),
+                  color: Colors.green[700],
+                ),
                 Text("${data["cost"] ?? 0}/person"),
               ],
             ),

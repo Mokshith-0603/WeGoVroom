@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:provider/provider.dart';
 
 import '../../../widgets/trip_card.dart';
@@ -278,17 +277,43 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               Padding(
                 padding: EdgeInsets.symmetric(horizontal: r(16)),
-                child: TextField(
-                  onChanged: (v) =>
-                      setState(() => _searchQuery = v.trim().toLowerCase()),
-                  decoration: InputDecoration(
-                    hintText: "Search trips, destinations...",
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(r(30)),
-                      borderSide: BorderSide.none,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(r(30)),
+                    color: Colors.white.withValues(alpha: 0.9),
+                    border: Border.all(
+                      color: const Color(0xffffd3b0),
+                      width: 1.2,
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        blurRadius: 10,
+                        color: Color(0x14000000),
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: TextField(
+                    onChanged: (v) =>
+                        setState(() => _searchQuery = v.trim().toLowerCase()),
+                    decoration: InputDecoration(
+                      hintText: "Search trips, destinations...",
+                      hintStyle: TextStyle(color: Colors.grey[600]),
+                      prefixIcon: Icon(Icons.search, color: Colors.grey[700]),
+                      suffixIcon: const Icon(
+                        Icons.tune_rounded,
+                        color: Color(0xffff7a00),
+                      ),
+                      filled: true,
+                      fillColor: Colors.transparent,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(r(30)),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: r(16),
+                        vertical: r(14),
+                      ),
                     ),
                   ),
                 ),
@@ -351,29 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (!now.isBefore(dt.add(const Duration(hours: 12)))) {
                         return false;
                       }
-
-                      final isPublicTrip = data["isPublic"] != false;
-                      if (isPublicTrip) return true;
-
-                      final currentUser = fb.FirebaseAuth.instance.currentUser;
-                      if (currentUser == null) return false;
-                      if (data["ownerId"] == currentUser.uid) return true;
-
-                      final invitedIds =
-                          ((data["invitedUserIds"] as List?) ?? const [])
-                              .map((e) => e.toString())
-                              .toSet();
-                      final invitedEmails =
-                          ((data["invitedUserEmails"] as List?) ?? const [])
-                              .map((e) => e.toString().trim().toLowerCase())
-                              .toSet();
-                      final currentEmail = (currentUser.email ?? "")
-                          .trim()
-                          .toLowerCase();
-
-                      return invitedIds.contains(currentUser.uid) ||
-                          (currentEmail.isNotEmpty &&
-                              invitedEmails.contains(currentEmail));
+                      return true;
                     }).toList();
 
                     if (docs.isEmpty) {

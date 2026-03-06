@@ -255,7 +255,7 @@ class ProfileDrawer extends StatelessWidget {
                       ),
                       ListTile(
                         leading: const Icon(Icons.rate_review_outlined),
-                        title: const Text('Feedback'),
+                        title: const Text('Feedback/Report an Issue'),
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
