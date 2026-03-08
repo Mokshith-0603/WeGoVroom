@@ -19,6 +19,14 @@ class _DriversScreenState extends State<DriversScreen> {
   bool _adminLoaded = false;
   Future<String>? _reviewerNameFuture;
 
+  Timestamp? _reviewTimestamp(Map<String, dynamic> data) {
+    final updated = data['updatedAt'];
+    if (updated is Timestamp) return updated;
+    final created = data['createdAt'];
+    if (created is Timestamp) return created;
+    return null;
+  }
+
   Future<String> _currentReviewerName() async {
     if (_reviewerNameFuture != null) {
       return _reviewerNameFuture!;
@@ -59,12 +67,46 @@ class _DriversScreenState extends State<DriversScreen> {
               stream: _db
                   .collection('driverReviews')
                   .where('driverId', isEqualTo: driverId)
-                  .orderBy('updatedAt', descending: true)
                   .snapshots(),
               builder: (_, snap) {
-                final docs = List<QueryDocumentSnapshot>.from(
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snap.hasError) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'Unable to load reviews right now.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+                }
+
+                final rawDocs = List<QueryDocumentSnapshot>.from(
                   snap.data?.docs ?? const [],
                 );
+
+                final docs = [...rawDocs];
+                docs.sort((a, b) {
+                  final ad = _reviewTimestamp(
+                    a.data() as Map<String, dynamic>,
+                  )?.toDate();
+                  final bd = _reviewTimestamp(
+                    b.data() as Map<String, dynamic>,
+                  )?.toDate();
+                  if (ad == null && bd == null) {
+                    return b.id.compareTo(a.id);
+                  }
+                  if (ad == null) return 1;
+                  if (bd == null) return -1;
+                  // Newest first.
+                  final cmp = bd.compareTo(ad);
+                  if (cmp != 0) return cmp;
+                  return b.id.compareTo(a.id);
+                });
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

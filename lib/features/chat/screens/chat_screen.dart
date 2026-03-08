@@ -80,6 +80,14 @@ class _ChatScreenState extends State<ChatScreen> {
     return DateTime.now().isBefore(dt.add(const Duration(hours: 12)));
   }
 
+  Timestamp? _messageTimestamp(Map<String, dynamic> data) {
+    final ts = data['createdAt'];
+    if (ts is Timestamp) return ts;
+    final local = data['createdAtLocal'];
+    if (local is Timestamp) return local;
+    return null;
+  }
+
   int _tripSortScore(Map<String, dynamic> tripData) {
     final ts = tripData['dateTime'];
     try {
@@ -255,7 +263,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> send() async {
-    if (_effectiveTripId == null || uid == null || !_canChat) return;
+    if (_effectiveTripId == null || uid == null || !_canChat) {
+      return;
+    }
 
     final text = controller.text.trim();
     if (text.isEmpty) return;
@@ -269,6 +279,8 @@ class _ChatScreenState extends State<ChatScreen> {
         'senderName': _myName,
         'senderAvatar': _myAvatar,
         'text': text,
+        // Used for immediate local ordering while server timestamp resolves.
+        'createdAtLocal': Timestamp.now(),
         'createdAt': FieldValue.serverTimestamp(),
       });
       controller.clear();
@@ -298,7 +310,7 @@ class _ChatScreenState extends State<ChatScreen> {
       data['senderAvatar'] ?? meta['avatar'],
     );
 
-    final timestamp = data['createdAt'] as Timestamp?;
+    final timestamp = _messageTimestamp(data);
     final time = timestamp != null
         ? DateFormat('hh:mm a').format(timestamp.toDate())
         : '';
@@ -409,16 +421,18 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
 
-        final tripData = tripSnap.data?.data() as Map<String, dynamic>?;
-        final isActiveTrip = tripData != null && _isTripActive(tripData);
+        final tripData =
+            tripSnap.data?.data() as Map<String, dynamic>?;
+        final isActiveTrip =
+            tripData != null && _isTripActive(tripData);
 
         if (!isActiveTrip) {
           return FutureBuilder<String?>(
-            future:
-                _tripResolutionFuture ??=
-                    _resolveFallbackTripId(excludeTripId: _effectiveTripId),
+            future: _tripResolutionFuture ??=
+                _resolveFallbackTripId(excludeTripId: _effectiveTripId),
             builder: (context, nextSnap) {
-              if (nextSnap.connectionState == ConnectionState.waiting) {
+              if (nextSnap.connectionState ==
+                  ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );
@@ -443,7 +457,7 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
 
-        final isOwner = tripData['ownerId'] == uid;
+        final isOwner = tripData!['ownerId'] == uid;
 
         return StreamBuilder<QuerySnapshot>(
           stream: db
@@ -491,6 +505,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
             final tripTitle =
                 '${tripData['from'] ?? ''} -> ${tripData['to'] ?? ''}';
+
+            final canSend = _canChat;
 
             return Scaffold(
               backgroundColor: Colors.white,
@@ -578,12 +594,11 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                             ),
                           ),
-                           StreamBuilder<QuerySnapshot>(
-                             stream: db
-                                 .collection('tripMessages')
-                                 .where('tripId', isEqualTo: _effectiveTripId)
-                                 .orderBy('createdAt')
-                                 .snapshots(),
+                          StreamBuilder<QuerySnapshot>(
+                            stream: db
+                                .collection('tripMessages')
+                                .where('tripId', isEqualTo: _effectiveTripId)
+                                .snapshots(),
                             builder: (_, snap) {
                               if (snap.connectionState ==
                                   ConnectionState.waiting) {
@@ -592,7 +607,24 @@ class _ChatScreenState extends State<ChatScreen> {
                                 );
                               }
 
-                              if (!snap.hasData || snap.data!.docs.isEmpty) {
+                              if (snap.hasError) {
+                                return Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(r(16)),
+                                    child: Text(
+                                      'Unable to load messages right now.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: r(14),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final rawDocs = snap.data?.docs ?? const [];
+                              if (rawDocs.isEmpty) {
                                 return Center(
                                   child: Text(
                                     'Start the conversation',
@@ -604,7 +636,27 @@ class _ChatScreenState extends State<ChatScreen> {
                                 );
                               }
 
-                               final messageDocs = snap.data!.docs;
+                              final messageDocs = [...rawDocs];
+                              messageDocs.sort((a, b) {
+                                final ad =
+                                    (a.data() as Map<String, dynamic>?) ??
+                                    const <String, dynamic>{};
+                                final bd =
+                                    (b.data() as Map<String, dynamic>?) ??
+                                    const <String, dynamic>{};
+                                final at =
+                                    _messageTimestamp(ad)?.toDate();
+                                final bt =
+                                    _messageTimestamp(bd)?.toDate();
+                                if (at == null && bt == null) {
+                                  return a.id.compareTo(b.id);
+                                }
+                                if (at == null) return 1;
+                                if (bt == null) return -1;
+                                final cmp = at.compareTo(bt);
+                                if (cmp != 0) return cmp;
+                                return a.id.compareTo(b.id);
+                              });
 
                               return ListView.builder(
                                 padding: EdgeInsets.symmetric(
@@ -647,6 +699,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                               child: TextField(
                                 controller: controller,
+                                enabled: canSend,
                                 maxLines: null,
                                 style: const TextStyle(color: Colors.black87),
                                 textInputAction: TextInputAction.send,
@@ -680,7 +733,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               ],
                             ),
                             child: IconButton(
-                              onPressed: send,
+                              onPressed: canSend ? send : null,
                               icon: const Icon(
                                 Icons.send_rounded,
                                 color: Colors.black,
