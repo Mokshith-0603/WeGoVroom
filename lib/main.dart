@@ -6,6 +6,7 @@ import 'firebase_options.dart';
 import 'features/splash/screens/startup_splash_screen.dart';
 import 'providers/auth_provider.dart';
 import 'navigation/app_router.dart';
+import 'services/push_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +14,8 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  await PushNotificationService.instance.initialize();
 
   runApp(
     ChangeNotifierProvider(

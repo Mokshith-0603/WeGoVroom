@@ -30,12 +30,14 @@ class _HomeScreenState extends State<HomeScreen> {
   String selectedChip = "All";
   String _searchQuery = "";
   bool _isCheckingCreateTrip = false;
-  Future<Map<String, dynamic>>? _userProfileFuture;
+  late final Future<Map<String, dynamic>> _userProfileFuture;
+  Map<String, dynamic> _userProfile = const {"name": "", "avatar": 0};
 
   @override
   void initState() {
     super.initState();
-    _userProfileFuture = _loadUserProfile();
+    _userProfileFuture = _loadUserProfileSnapshot();
+    _loadUserProfile();
   }
 
   Future<bool> hasActiveTrip(String uid) async {
@@ -107,7 +109,28 @@ class _HomeScreenState extends State<HomeScreen> {
     return false;
   }
 
-  Future<Map<String, dynamic>> _loadUserProfile() async {
+  Future<void> _loadUserProfile() async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null) {
+      return;
+    }
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+    final data = doc.data();
+
+    if (!mounted) return;
+    setState(() {
+      _userProfile = {
+        "name": data?['displayName'] ?? user.email?.split('@').first ?? "",
+        "avatar": normalizeAvatarIndex(data?['avatar']),
+      };
+    });
+  }
+
+  Future<Map<String, dynamic>> _loadUserProfileSnapshot() async {
     final user = context.read<AuthProvider>().user;
     if (user == null) {
       return const {"name": "", "avatar": 0};
@@ -207,12 +230,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       builder: (context) {
                         return GestureDetector(
                           onTap: () => Scaffold.of(context).openDrawer(),
-                          child: FutureBuilder<Map<String, dynamic>>(
-                            future: _userProfileFuture,
-                            builder: (_, snap) {
-                              final avatar = (snap.data?["avatar"] ?? 0) as int;
-                              return buildAvatar(avatar, radius: r(22));
-                            },
+                          child: buildAvatar(
+                            (_userProfile["avatar"] ?? 0) as int,
+                            radius: r(22),
                           ),
                         );
                       },

@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/auth_provider.dart';
+import '../../../services/push_notification_service.dart';
 import '../../auth/screens/landing_screen.dart';
 import '../widgets/avatar_utils.dart';
 
@@ -79,6 +80,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     }
 
     await userRef.set(payload, SetOptions(merge: true));
+    await PushNotificationService.instance.syncCurrentUserToken();
 
     auth.refresh();
 

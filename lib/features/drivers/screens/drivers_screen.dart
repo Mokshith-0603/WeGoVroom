@@ -17,8 +17,17 @@ class _DriversScreenState extends State<DriversScreen> {
   final _auth = FirebaseAuth.instance;
   bool _isAdminUser = false;
   bool _adminLoaded = false;
+  Future<String>? _reviewerNameFuture;
 
   Future<String> _currentReviewerName() async {
+    if (_reviewerNameFuture != null) {
+      return _reviewerNameFuture!;
+    }
+    _reviewerNameFuture = _loadCurrentReviewerName();
+    return _reviewerNameFuture!;
+  }
+
+  Future<String> _loadCurrentReviewerName() async {
     final user = _auth.currentUser;
     if (user == null) return 'User';
     try {
@@ -50,25 +59,12 @@ class _DriversScreenState extends State<DriversScreen> {
               stream: _db
                   .collection('driverReviews')
                   .where('driverId', isEqualTo: driverId)
+                  .orderBy('updatedAt', descending: true)
                   .snapshots(),
               builder: (_, snap) {
                 final docs = List<QueryDocumentSnapshot>.from(
                   snap.data?.docs ?? const [],
                 );
-                docs.sort((a, b) {
-                  final ta =
-                      ((a.data() as Map<String, dynamic>)['updatedAt']
-                              as Timestamp?)
-                          ?.toDate();
-                  final tb =
-                      ((b.data() as Map<String, dynamic>)['updatedAt']
-                              as Timestamp?)
-                          ?.toDate();
-                  if (ta == null && tb == null) return 0;
-                  if (ta == null) return 1;
-                  if (tb == null) return -1;
-                  return tb.compareTo(ta);
-                });
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -95,39 +91,15 @@ class _DriversScreenState extends State<DriversScreen> {
                                     (data['reviewerName'] ?? '')
                                         .toString()
                                         .trim();
-                                final reviewerId = (data['userId'] ?? '')
-                                    .toString();
                                 final rating = ((data['rating'] ?? 0) as num)
                                     .toDouble();
                                 final comment = (data['comment'] ?? '')
                                     .toString();
                                 return ListTile(
                                   leading: const Icon(Icons.person_outline),
-                                  title: reviewerName.isNotEmpty
-                                      ? Text(
-                                          '$reviewerName - ${rating.toStringAsFixed(1)}/5',
-                                        )
-                                      : FutureBuilder<DocumentSnapshot?>(
-                                          future: reviewerId.isEmpty
-                                              ? Future.value(null)
-                                              : _db
-                                                    .collection('users')
-                                                    .doc(reviewerId)
-                                                    .get(),
-                                          builder: (_, userSnap) {
-                                            final userData =
-                                                userSnap.data?.data()
-                                                    as Map<String, dynamic>?;
-                                            final resolvedName =
-                                                (userData?['displayName'] ??
-                                                        userData?['name'] ??
-                                                        reviewerId)
-                                                    .toString();
-                                            return Text(
-                                              '$resolvedName - ${rating.toStringAsFixed(1)}/5',
-                                            );
-                                          },
-                                        ),
+                                  title: Text(
+                                    '${reviewerName.isNotEmpty ? reviewerName : 'User'} - ${rating.toStringAsFixed(1)}/5',
+                                  ),
                                   subtitle: comment.trim().isEmpty
                                       ? const Text('No comment')
                                       : Text(comment),
@@ -512,6 +484,7 @@ class _DriversScreenState extends State<DriversScreen> {
   Widget _driverCard(
     String driverId,
     Map<String, dynamic> d,
+    _DriverReviewSummary reviewSummary,
     BuildContext context,
   ) {
     final name = d['name'] ?? 'Driver';
@@ -562,82 +535,53 @@ class _DriversScreenState extends State<DriversScreen> {
                   ),
                 ),
                 SizedBox(height: r(4)),
-                StreamBuilder<QuerySnapshot>(
-                  stream: _db
-                      .collection('driverReviews')
-                      .where('driverId', isEqualTo: driverId)
-                      .snapshots(),
-                  builder: (_, snap) {
-                    final docs = snap.data?.docs ?? const [];
-
-                    double avg = fallbackRating;
-                    int count = 0;
-                    double? myRating;
-                    String myComment = '';
-
-                    if (docs.isNotEmpty) {
-                      double total = 0;
-                      for (final doc in docs) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        final ratingValue = ((data['rating'] ?? 0) as num)
-                            .toDouble();
-                        total += ratingValue;
-                        if (uid != null && data['userId'] == uid) {
-                          myRating = ratingValue;
-                          myComment = (data['comment'] ?? '').toString();
-                        }
-                      }
-                      count = docs.length;
-                      avg = total / count;
-                    }
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            Icon(Icons.star, size: r(16), color: secondary),
-                            Text(
-                              '${avg.toStringAsFixed(1)} (${count > 0 ? count : '0'} reviews)',
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: r(6)),
-                        TextButton.icon(
-                          onPressed: () => _openDriverReviewsBottomSheet(
-                            driverId: driverId,
-                            driverName: name.toString(),
-                          ),
-                          icon: const Icon(Icons.visibility_outlined),
-                          label: const Text('View Reviews'),
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size(0, r(28)),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: uid == null
-                              ? null
-                              : () => _openDriverReviewDialog(
-                                  driverId: driverId,
-                                  driverName: name.toString(),
-                                  initialRating: myRating,
-                                  initialComment: myComment,
-                                ),
-                          icon: const Icon(Icons.rate_review_outlined),
-                          label: Text(
-                            myRating == null ? 'Rate/Review' : 'Edit Review',
-                          ),
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size(0, r(28)),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
+                        Icon(Icons.star, size: r(16), color: secondary),
+                        Text(
+                          '${reviewSummary.averageOr(fallbackRating).toStringAsFixed(1)} (${reviewSummary.count} reviews)',
                         ),
                       ],
-                    );
-                  },
+                    ),
+                    SizedBox(height: r(6)),
+                    TextButton.icon(
+                      onPressed: () => _openDriverReviewsBottomSheet(
+                        driverId: driverId,
+                        driverName: name.toString(),
+                      ),
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('View Reviews'),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size(0, r(28)),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: uid == null
+                          ? null
+                          : () => _openDriverReviewDialog(
+                              driverId: driverId,
+                              driverName: name.toString(),
+                              initialRating: reviewSummary.myRating,
+                              initialComment: reviewSummary.myComment,
+                            ),
+                      icon: const Icon(Icons.rate_review_outlined),
+                      label: Text(
+                        reviewSummary.myRating == null
+                            ? 'Rate/Review'
+                            : 'Edit Review',
+                      ),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size(0, r(28)),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -682,42 +626,94 @@ class _DriversScreenState extends State<DriversScreen> {
 
     return StreamBuilder<QuerySnapshot>(
       stream: _db.collection('drivers').snapshots(),
-      builder: (_, snap) {
-        if (!_adminLoaded || !snap.hasData) {
+      builder: (_, driversSnap) {
+        if (!_adminLoaded || !driversSnap.hasData) {
           return const Center(child: CircularProgressIndicator());
         }
 
-        final docs = snap.data!.docs;
+        final docs = driversSnap.data!.docs;
         if (docs.isEmpty) {
           return const Center(child: Text('No drivers available'));
         }
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(r(16), r(12), r(16), r(8)),
-              child: Text(
-                'Best drivers who take you at the best price.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                padding: EdgeInsets.all(r(16)),
-                itemCount: docs.length,
-                itemBuilder: (_, i) {
-                  final doc = docs[i];
-                  final d = doc.data() as Map<String, dynamic>;
-                  return _driverCard(doc.id, d, context);
-                },
-              ),
-            ),
-          ],
+        return StreamBuilder<QuerySnapshot>(
+          stream: _db.collection('driverReviews').snapshots(),
+          builder: (_, reviewsSnap) {
+            final summaries = _buildReviewSummaries(
+              reviewsSnap.data?.docs ?? const [],
+              _auth.currentUser?.uid,
+            );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(r(16), r(12), r(16), r(8)),
+                  child: Text(
+                    'Best drivers who take you at the best price.',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    padding: EdgeInsets.all(r(16)),
+                    itemCount: docs.length,
+                    itemBuilder: (_, i) {
+                      final doc = docs[i];
+                      final d = doc.data() as Map<String, dynamic>;
+                      return _driverCard(
+                        doc.id,
+                        d,
+                        summaries[doc.id] ?? const _DriverReviewSummary(),
+                        context,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
+    );
+  }
+
+  Map<String, _DriverReviewSummary> _buildReviewSummaries(
+    List<QueryDocumentSnapshot> docs,
+    String? currentUserId,
+  ) {
+    final summaries = <String, _DriverReviewSummaryAccumulator>{};
+
+    for (final doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final driverId = (data['driverId'] ?? '').toString();
+      if (driverId.isEmpty) continue;
+
+      final summary = summaries.putIfAbsent(
+        driverId,
+        _DriverReviewSummaryAccumulator.new,
+      );
+      final rating = ((data['rating'] ?? 0) as num).toDouble();
+      summary.total += rating;
+      summary.count += 1;
+      if (currentUserId != null && data['userId'] == currentUserId) {
+        summary.myRating = rating;
+        summary.myComment = (data['comment'] ?? '').toString();
+      }
+    }
+
+    return summaries.map(
+      (key, value) => MapEntry(
+        key,
+        _DriverReviewSummary(
+          count: value.count,
+          average: value.count == 0 ? null : value.total / value.count,
+          myRating: value.myRating,
+          myComment: value.myComment,
+        ),
+      ),
     );
   }
 
@@ -760,4 +756,27 @@ class _DriversScreenState extends State<DriversScreen> {
             ),
     );
   }
+}
+
+class _DriverReviewSummaryAccumulator {
+  double total = 0;
+  int count = 0;
+  double? myRating;
+  String myComment = '';
+}
+
+class _DriverReviewSummary {
+  final int count;
+  final double? average;
+  final double? myRating;
+  final String myComment;
+
+  const _DriverReviewSummary({
+    this.count = 0,
+    this.average,
+    this.myRating,
+    this.myComment = '',
+  });
+
+  double averageOr(double fallback) => average ?? fallback;
 }
