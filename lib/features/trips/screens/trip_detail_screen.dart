@@ -120,11 +120,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }
 
   String _tripShareLink() {
-    final base = Uri.base;
-    if (base.hasAuthority) {
-      return "${base.scheme}://${base.authority}${base.path}?tripId=${widget.tripId}";
-    }
-    return "https://wegovroom.app/?tripId=${widget.tripId}";
+    final uri = Uri.https("wegovroom.app", "/", {"tripId": widget.tripId});
+    return uri.toString();
   }
 
   Future<void> _copyTripLink() async {
@@ -138,7 +135,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
   Future<void> _shareToWhatsApp() async {
     final link = _tripShareLink();
-    final text = Uri.encodeComponent("Join my WeGoVroom trip: $link");
+    final text = Uri.encodeComponent("Join my WeGoVroom trip:\n$link");
     final url = Uri.parse("https://wa.me/?text=$text");
     final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
     if (!opened && mounted) {
