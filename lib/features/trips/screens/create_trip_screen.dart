@@ -417,7 +417,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Align(
-                    alignment: Alignment.centerRight,
+                    alignment: Alignment.centerLeft,
                     child: Text(
                       "(Departure date & time)",
                       style: TextStyle(

@@ -68,6 +68,8 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
         batch.set(ref, {
           "userId": userId,
           "message": message,
+          "type": "admin_announcement",
+          "senderRole": "admin",
           "createdAt": FieldValue.serverTimestamp(),
           "createdBy": _auth.currentUser?.uid,
         });

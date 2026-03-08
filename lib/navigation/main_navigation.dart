@@ -79,30 +79,48 @@ class _MainNavigationState extends State<MainNavigation> {
         .asyncMap((snap) async {
           try {
             final now = DateTime.now();
+            final ownedSnapFuture = db
+                .collection("trips")
+                .where("ownerId", isEqualTo: user!.uid)
+                .get();
+            final participantTripIds = snap.docs
+                .map((doc) => doc.data()["tripId"] as String?)
+                .whereType<String>()
+                .where((tid) => tid.isNotEmpty)
+                .toSet()
+                .toList();
+
             String? fallbackJoinedTripId;
 
-            for (final doc in snap.docs) {
-              try {
-                final tid = doc.data()["tripId"] as String?;
-                if (tid == null) continue;
+            for (var i = 0; i < participantTripIds.length; i += 10) {
+              final chunk = participantTripIds.sublist(
+                i,
+                i + 10 > participantTripIds.length
+                    ? participantTripIds.length
+                    : i + 10,
+              );
+              final tripsSnap = await db
+                  .collection("trips")
+                  .where(FieldPath.documentId, whereIn: chunk)
+                  .get();
 
-                final tripDoc = await db.collection("trips").doc(tid).get();
-                if (!tripDoc.exists) continue;
-                fallbackJoinedTripId ??= tid;
-
-                final ts = tripDoc.data()?["dateTime"];
+              for (final tripDoc in tripsSnap.docs) {
+                final data = tripDoc.data();
+                fallbackJoinedTripId ??= tripDoc.id;
+                final ts = data["dateTime"];
                 if (ts == null) continue;
 
-                final dt = ts.toDate();
-                final data = tripDoc.data() ?? const <String, dynamic>{};
-                final completed = data["completed"] == true;
-                if (!completed &&
-                    now.isBefore(dt.add(const Duration(hours: 12)))) {
-                  lastKnownTripId = tid;
-                  return tid;
+                try {
+                  final dt = ts.toDate();
+                  final completed = data["completed"] == true;
+                  if (!completed &&
+                      now.isBefore(dt.add(const Duration(hours: 12)))) {
+                    lastKnownTripId = tripDoc.id;
+                    return tripDoc.id;
+                  }
+                } catch (_) {
+                  continue;
                 }
-              } catch (_) {
-                continue;
               }
             }
 
@@ -112,10 +130,7 @@ class _MainNavigationState extends State<MainNavigation> {
             }
 
             try {
-              final ownedSnap = await db
-                  .collection("trips")
-                  .where("ownerId", isEqualTo: user!.uid)
-                  .get();
+              final ownedSnap = await ownedSnapFuture;
 
               if (ownedSnap.docs.isNotEmpty) {
                 QueryDocumentSnapshot<Map<String, dynamic>>? bestDoc;
@@ -153,7 +168,8 @@ class _MainNavigationState extends State<MainNavigation> {
           } catch (_) {
             return lastKnownTripId;
           }
-        });
+        })
+        .distinct();
   }
 
   @override
@@ -163,26 +179,16 @@ class _MainNavigationState extends State<MainNavigation> {
       builder: (context, snap) {
         final tripId = snap.data;
 
-        Widget page;
-        switch (index) {
-          case 0:
-            page = const HomeScreen();
-            break;
-          case 1:
-            page = const MyTripsScreen();
-            break;
-          case 2:
-            page = const DriversScreen();
-            break;
-          case 3:
-            page = ChatScreen(tripId: tripId);
-            break;
-          default:
-            page = const HomeScreen();
-        }
-
         return Scaffold(
-          body: page,
+          body: IndexedStack(
+            index: index,
+            children: [
+              const HomeScreen(),
+              const MyTripsScreen(),
+              const DriversScreen(),
+              ChatScreen(tripId: tripId),
+            ],
+          ),
           bottomNavigationBar: NavigationBar(
             height: context.rs(70),
             selectedIndex: index,

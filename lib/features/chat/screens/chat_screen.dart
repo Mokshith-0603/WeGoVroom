@@ -22,6 +22,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _canChat = false;
   String? _effectiveTripId;
+  Future<String?>? _tripResolutionFuture;
 
   bool _profileLoaded = false;
   String _myName = 'User';
@@ -31,6 +32,9 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _effectiveTripId = widget.tripId;
+    if (_effectiveTripId == null) {
+      _tripResolutionFuture = _resolveFallbackTripId();
+    }
   }
 
   @override
@@ -38,7 +42,27 @@ class _ChatScreenState extends State<ChatScreen> {
     super.didUpdateWidget(oldWidget);
     if (widget.tripId != null && widget.tripId != oldWidget.tripId) {
       _effectiveTripId = widget.tripId;
+      _tripResolutionFuture = null;
+    } else if (widget.tripId == null && oldWidget.tripId != null) {
+      _effectiveTripId = null;
+      _queueTripResolution();
     }
+  }
+
+  void _queueTripResolution({String? excludeTripId}) {
+    _tripResolutionFuture = _resolveFallbackTripId(excludeTripId: excludeTripId);
+  }
+
+  void _setEffectiveTripId(String? tripId) {
+    if (!mounted || _effectiveTripId == tripId) return;
+    setState(() {
+      _effectiveTripId = tripId;
+      if (tripId == null) {
+        _queueTripResolution();
+      } else {
+        _tripResolutionFuture = null;
+      }
+    });
   }
 
   DateTime? _tripDateTime(Map<String, dynamic> tripData) {
@@ -87,30 +111,41 @@ class _ChatScreenState extends State<ChatScreen> {
     if (uid == null) return null;
 
     final candidates = <Map<String, dynamic>>[];
-
-    final participantSnap = await db
+    final participantSnapFuture = db
         .collection('tripParticipants')
         .where('userId', isEqualTo: uid)
         .get();
-
-    for (final p in participantSnap.docs) {
-      final tripId = p.data()['tripId'] as String?;
-      if (tripId == null || tripId.isEmpty) continue;
-      if (excludeTripId != null && tripId == excludeTripId) continue;
-
-      final tripDoc = await db.collection('trips').doc(tripId).get();
-      if (!tripDoc.exists) continue;
-
-      final data = tripDoc.data();
-      if (data == null || !_isTripActive(data)) continue;
-
-      candidates.add({'id': tripId, 'data': data});
-    }
-
-    final ownerSnap = await db
+    final ownerSnapFuture = db
         .collection('trips')
         .where('ownerId', isEqualTo: uid)
         .get();
+
+    final participantSnap = await participantSnapFuture;
+    final participantTripIds = participantSnap.docs
+        .map((p) => p.data()['tripId'] as String?)
+        .whereType<String>()
+        .where((tripId) => tripId.isNotEmpty && tripId != excludeTripId)
+        .toSet()
+        .toList();
+
+    for (var i = 0; i < participantTripIds.length; i += 10) {
+      final chunk = participantTripIds.sublist(
+        i,
+        i + 10 > participantTripIds.length ? participantTripIds.length : i + 10,
+      );
+      final tripSnap = await db
+          .collection('trips')
+          .where(FieldPath.documentId, whereIn: chunk)
+          .get();
+      for (final tripDoc in tripSnap.docs) {
+        final data = tripDoc.data();
+        if (_isTripActive(data)) {
+          candidates.add({'id': tripDoc.id, 'data': data});
+        }
+      }
+    }
+
+    final ownerSnap = await ownerSnapFuture;
     for (final t in ownerSnap.docs) {
       if (excludeTripId != null && t.id == excludeTripId) continue;
       final data = t.data();
@@ -343,7 +378,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (_effectiveTripId == null) {
       return FutureBuilder<String?>(
-        future: _resolveFallbackTripId(),
+        future: _tripResolutionFuture ??= _resolveFallbackTripId(),
         builder: (context, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Scaffold(
@@ -355,10 +390,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (resolvedTripId == null) return _noTrip();
 
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            if (_effectiveTripId != resolvedTripId) {
-              setState(() => _effectiveTripId = resolvedTripId);
-            }
+            _setEffectiveTripId(resolvedTripId);
           });
 
           return const Scaffold(
@@ -382,7 +414,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
         if (!isActiveTrip) {
           return FutureBuilder<String?>(
-            future: _resolveFallbackTripId(excludeTripId: _effectiveTripId),
+            future:
+                _tripResolutionFuture ??=
+                    _resolveFallbackTripId(excludeTripId: _effectiveTripId),
             builder: (context, nextSnap) {
               if (nextSnap.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
@@ -393,19 +427,13 @@ class _ChatScreenState extends State<ChatScreen> {
               final nextTripId = nextSnap.data;
               if (nextTripId == null) {
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!mounted) return;
-                  if (_effectiveTripId != null) {
-                    setState(() => _effectiveTripId = null);
-                  }
+                  _setEffectiveTripId(null);
                 });
                 return _noTrip();
               }
 
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!mounted) return;
-                if (_effectiveTripId != nextTripId) {
-                  setState(() => _effectiveTripId = nextTripId);
-                }
+                _setEffectiveTripId(nextTripId);
               });
 
               return const Scaffold(
@@ -550,11 +578,12 @@ class _ChatScreenState extends State<ChatScreen> {
                               ),
                             ),
                           ),
-                          StreamBuilder<QuerySnapshot>(
-                            stream: db
-                                .collection('tripMessages')
-                                .where('tripId', isEqualTo: _effectiveTripId)
-                                .snapshots(),
+                           StreamBuilder<QuerySnapshot>(
+                             stream: db
+                                 .collection('tripMessages')
+                                 .where('tripId', isEqualTo: _effectiveTripId)
+                                 .orderBy('createdAt')
+                                 .snapshots(),
                             builder: (_, snap) {
                               if (snap.connectionState ==
                                   ConnectionState.waiting) {
@@ -575,29 +604,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 );
                               }
 
-                              final messageDocs = [...snap.data!.docs]
-                                ..sort((a, b) {
-                                  final ta =
-                                      (a.data()
-                                              as Map<
-                                                String,
-                                                dynamic
-                                              >)['createdAt']
-                                          as Timestamp?;
-                                  final tb =
-                                      (b.data()
-                                              as Map<
-                                                String,
-                                                dynamic
-                                              >)['createdAt']
-                                          as Timestamp?;
-                                  final da = ta?.toDate();
-                                  final dbb = tb?.toDate();
-                                  if (da == null && dbb == null) return 0;
-                                  if (da == null) return 1;
-                                  if (dbb == null) return -1;
-                                  return da.compareTo(dbb);
-                                });
+                               final messageDocs = snap.data!.docs;
 
                               return ListView.builder(
                                 padding: EdgeInsets.symmetric(
