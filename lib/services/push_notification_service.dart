@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,6 +20,10 @@ class PushNotificationService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+      _inAppNotificationSub;
+  final Set<String> _seenNotificationIds = <String>{};
+  String? _lastSyncedUserId;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
     'wegovroom_notifications',
@@ -45,7 +50,9 @@ class PushNotificationService {
     _auth.authStateChanges().listen((_) async {
       final currentToken = await _messaging.getToken();
       await _saveTokenForCurrentUser(currentToken);
+      _startInAppNotificationListener();
     });
+    _startInAppNotificationListener();
 
     FirebaseMessaging.onMessage.listen(_showForegroundNotification);
     FirebaseMessaging.onMessageOpenedApp.listen((message) {
@@ -109,6 +116,82 @@ class PushNotificationService {
       notification.hashCode,
       notification.title,
       notification.body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channel.id,
+          _channel.name,
+          channelDescription: _channel.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: const DarwinNotificationDetails(),
+      ),
+    );
+  }
+
+  void _startInAppNotificationListener() {
+    final user = _auth.currentUser;
+    final uid = user?.uid;
+    if (uid == null || uid.isEmpty) {
+      _inAppNotificationSub?.cancel();
+      _inAppNotificationSub = null;
+      _seenNotificationIds.clear();
+      _lastSyncedUserId = null;
+      return;
+    }
+
+    if (_lastSyncedUserId == uid && _inAppNotificationSub != null) {
+      return;
+    }
+
+    _inAppNotificationSub?.cancel();
+    _seenNotificationIds.clear();
+    _lastSyncedUserId = uid;
+
+    var firstSnapshot = true;
+    _inAppNotificationSub = _db
+        .collection('notifications')
+        .where('userId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(50)
+        .snapshots()
+        .listen((snap) async {
+      if (firstSnapshot) {
+        for (final doc in snap.docs) {
+          _seenNotificationIds.add(doc.id);
+        }
+        firstSnapshot = false;
+        return;
+      }
+
+      for (final change in snap.docChanges) {
+        if (change.type != DocumentChangeType.added) continue;
+        final doc = change.doc;
+        if (_seenNotificationIds.contains(doc.id)) continue;
+        _seenNotificationIds.add(doc.id);
+
+        final data = doc.data() ?? const <String, dynamic>{};
+        final body = (data['message'] ?? '').toString().trim();
+        if (body.isEmpty) continue;
+        await _showLocalAppNotification(
+          id: doc.id.hashCode,
+          title: 'WeGoVroom',
+          body: body,
+        );
+      }
+    });
+  }
+
+  Future<void> _showLocalAppNotification({
+    required int id,
+    required String title,
+    required String body,
+  }) async {
+    await _localNotifications.show(
+      id,
+      title,
+      body,
       NotificationDetails(
         android: AndroidNotificationDetails(
           _channel.id,
