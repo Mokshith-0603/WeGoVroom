@@ -24,6 +24,23 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   bool hasPendingRequest = false;
   String? pendingRequestId;
 
+  Future<Map<String, Map<String, dynamic>>> _loadAllParticipantInfos(
+    List<QueryDocumentSnapshot> docs,
+  ) async {
+    final userIds = <String>{};
+    for (final doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final uid = data['userId'] as String?;
+      if (uid != null) userIds.add(uid);
+    }
+
+    final infos = <String, Map<String, dynamic>>{};
+    for (final uid in userIds) {
+      infos[uid] = await _participantInfo(uid);
+    }
+    return infos;
+  }
+
   Future<Map<String, dynamic>> _participantInfo(String userId) async {
     final userDoc = await db.collection("users").doc(userId).get();
     final userData = userDoc.data() ?? const <String, dynamic>{};
@@ -92,6 +109,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     required bool loading,
     required String reviewerName,
     required Map<String, dynamic> tripData,
+    required Map<String, dynamic>? participantInfo,
   }) {
     final data = p.data() as Map<String, dynamic>;
     final participantId = data["userId"] as String?;
@@ -114,106 +132,98 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       );
     }
 
-    return FutureBuilder<Map<String, dynamic>>(
-      future: _participantInfo(participantId),
-      builder: (_, snap) {
-        if (!snap.hasData) {
-          // Show fallback while loading
-          final fallbackName = data["name"] ?? "User";
-          final fallbackAvatar = normalizeAvatarIndex(data["avatar"]);
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundColor: const Color(0xffff7a00),
-              child: buildAvatar(fallbackAvatar, radius: 20),
-            ),
-            title: Text(fallbackName),
-          );
-        }
+    if (participantInfo == null) {
+      // Loading state
+      return ListTile(
+        leading: const CircleAvatar(
+          backgroundColor: Color(0xffff7a00),
+          child: CircularProgressIndicator(),
+        ),
+        title: Text(data["name"] ?? "User"),
+      );
+    }
 
-        final info = snap.data!;
-        final displayName = info["name"] ?? "User";
-        final avatarIdx = info["avatar"] as int;
-        final gender = (info["gender"] ?? "Not set").toString();
-        final trips = (info["trips"] ?? 0) as int;
+    final displayName = participantInfo["name"] ?? "User";
+    final avatarIdx = participantInfo["avatar"] as int;
+    final gender = (participantInfo["gender"] ?? "Not set").toString();
+    final trips = (participantInfo["trips"] ?? 0) as int;
 
-        return ListTile(
-          onTap: () => _openUserReviewsBottomSheet(
-            revieweeId: participantId,
-            revieweeName: displayName,
+    return ListTile(
+      onTap: () => _openUserReviewsBottomSheet(
+        revieweeId: participantId,
+        revieweeName: displayName,
+      ),
+      leading: CircleAvatar(
+        backgroundColor: const Color(0xffff7a00),
+        child: buildAvatar(avatarIdx, radius: 20),
+      ),
+      title: Text(displayName),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (isHost) const Text("Host"),
+          Text(
+            "Gender: $gender  |  Trips: $trips",
+            style: TextStyle(color: Colors.grey[700], fontSize: 12),
           ),
-          leading: CircleAvatar(
-            backgroundColor: const Color(0xffff7a00),
-            child: buildAvatar(avatarIdx, radius: 20),
-          ),
-          title: Text(displayName),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (isHost) const Text("Host"),
-              Text(
-                "Gender: $gender  |  Trips: $trips",
-                style: TextStyle(color: Colors.grey[700], fontSize: 12),
-              ),
-              StreamBuilder<QuerySnapshot>(
-                stream: db
-                    .collection("tripReviews")
-                    .where("revieweeId", isEqualTo: participantId)
-                    .snapshots(),
-                builder: (_, reviewSnap) {
-                  final summary = _reviewSummaryFromDocs(
-                    List<QueryDocumentSnapshot>.from(
-                      reviewSnap.data?.docs ?? const [],
-                    ),
-                  );
-                  final reviewCount = summary["count"] as int;
-                  final avgRating = (summary["avg"] as double);
-
-                  if (reviewCount == 0) {
-                    return Text(
-                      "No reviews yet",
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    );
-                  }
-
-                  return Text(
-                    "${avgRating.toStringAsFixed(1)}/5 from $reviewCount reviews",
-                    style: TextStyle(color: Colors.grey[700], fontSize: 12),
-                  );
-                },
-              ),
-            ],
-          ),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (canRemove)
-                IconButton(
-                  tooltip: "Remove user",
-                  icon: const Icon(Icons.person_remove, color: Colors.red),
-                  onPressed: loading
-                      ? null
-                      : () => _openRemoveParticipantDialog(
-                          participantRef: p.reference,
-                          participantUserId: participantId,
-                          participantName: displayName,
-                          trip: tripData,
-                        ),
+          StreamBuilder<QuerySnapshot>(
+            stream: db
+                .collection("tripReviews")
+                .where("revieweeId", isEqualTo: participantId)
+                .snapshots(),
+            builder: (_, reviewSnap) {
+              final summary = _reviewSummaryFromDocs(
+                List<QueryDocumentSnapshot>.from(
+                  reviewSnap.data?.docs ?? const [],
                 ),
-              showReviewButton
-                  ? TextButton(
-                      onPressed: () => _openReviewDialog(
-                        reviewerId: currentUserId!,
-                        reviewerName: reviewerName,
-                        revieweeId: participantId,
-                        revieweeName: displayName,
-                      ),
-                      child: const Text("Review"),
-                    )
-                  : const Text("View"),
-            ],
+              );
+              final reviewCount = summary["count"] as int;
+              final avgRating = (summary["avg"] as double);
+
+              if (reviewCount == 0) {
+                return Text(
+                  "No reviews yet",
+                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                );
+              }
+
+              return Text(
+                "${avgRating.toStringAsFixed(1)}/5 from $reviewCount reviews",
+                style: TextStyle(color: Colors.grey[700], fontSize: 12),
+              );
+            },
           ),
-        );
-      },
+        ],
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (canRemove)
+            IconButton(
+              tooltip: "Remove user",
+              icon: const Icon(Icons.person_remove, color: Colors.red),
+              onPressed: loading
+                  ? null
+                  : () => _openRemoveParticipantDialog(
+                      participantRef: p.reference,
+                      participantUserId: participantId,
+                      participantName: displayName,
+                      trip: tripData,
+                    ),
+            ),
+          showReviewButton
+              ? TextButton(
+                  onPressed: () => _openReviewDialog(
+                    reviewerId: currentUserId!,
+                    reviewerName: reviewerName,
+                    revieweeId: participantId,
+                    revieweeName: displayName,
+                  ),
+                  child: const Text("Review"),
+                )
+              : const Text("View"),
+        ],
+      ),
     );
   }
 
@@ -1186,65 +1196,73 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           return 0;
         });
 
-        String reviewerName = "User";
-        if (currentUserId != null) {
-          if (currentUserId == ownerId) {
-            reviewerName = ownerName;
-          }
-          for (final doc in docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            if (data["userId"] == currentUserId) {
-              reviewerName = data["name"] ?? "User";
-              break;
+        return FutureBuilder<Map<String, Map<String, dynamic>>>(
+          future: _loadAllParticipantInfos(docs),
+          builder: (context, infoSnap) {
+            final infos = infoSnap.data ?? {};
+
+            String reviewerName = "User";
+            if (currentUserId != null) {
+              if (currentUserId == ownerId) {
+                reviewerName = ownerName;
+              }
+              for (final doc in docs) {
+                final data = doc.data() as Map<String, dynamic>;
+                if (data["userId"] == currentUserId) {
+                  reviewerName = data["name"] ?? "User";
+                  break;
+                }
+              }
             }
-          }
-        }
 
-        final canCurrentUserReview =
-            currentUserId != null &&
-            (currentUserId == ownerId ||
-                docs.any((d) {
-                  final data = d.data() as Map<String, dynamic>;
-                  return data["userId"] == currentUserId;
-                }));
+            final canCurrentUserReview =
+                currentUserId != null &&
+                (currentUserId == ownerId ||
+                    docs.any((d) {
+                      final data = d.data() as Map<String, dynamic>;
+                      return data["userId"] == currentUserId;
+                    }));
 
-        return _card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Participants",
-                style: TextStyle(fontWeight: FontWeight.bold),
+            return _card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    "Participants",
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  ...docs.map((p) {
+                    final data = p.data() as Map<String, dynamic>;
+                    final participantId = data["userId"] as String?;
+                    final isHost = participantId == ownerId;
+                    final showReviewButton =
+                        allowReview &&
+                        canCurrentUserReview &&
+                        participantId != null &&
+                        participantId != currentUserId;
+                    final canRemove =
+                        allowHostRemove &&
+                        participantId != null &&
+                        participantId != ownerId;
+
+                    return _buildParticipantTile(
+                      p: p,
+                      ownerId: ownerId,
+                      currentUserId: currentUserId,
+                      allowReview: allowReview,
+                      allowHostRemove: allowHostRemove,
+                      canCurrentUserReview: canCurrentUserReview,
+                      loading: loading,
+                      reviewerName: reviewerName,
+                      tripData: tripData,
+                      participantInfo: infos[participantId],
+                    );
+                  }),
+                ],
               ),
-              const SizedBox(height: 12),
-              ...docs.map((p) {
-                final data = p.data() as Map<String, dynamic>;
-                final participantId = data["userId"] as String?;
-                final isHost = participantId == ownerId;
-                final showReviewButton =
-                    allowReview &&
-                    canCurrentUserReview &&
-                    participantId != null &&
-                    participantId != currentUserId;
-                final canRemove =
-                    allowHostRemove &&
-                    participantId != null &&
-                    participantId != ownerId;
-
-                return _buildParticipantTile(
-                  p: p,
-                  ownerId: ownerId,
-                  currentUserId: currentUserId,
-                  allowReview: allowReview,
-                  allowHostRemove: allowHostRemove,
-                  canCurrentUserReview: canCurrentUserReview,
-                  loading: loading,
-                  reviewerName: reviewerName,
-                  tripData: tripData,
-                );
-              }),
-            ],
-          ),
+            );
+          },
         );
       },
     );

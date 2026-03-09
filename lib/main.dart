@@ -5,21 +5,23 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'features/splash/screens/startup_splash_screen.dart';
 import 'providers/auth_provider.dart';
+import 'providers/user_profile_provider.dart';
 import 'navigation/app_router.dart';
 import 'services/push_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   await PushNotificationService.instance.initialize();
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => UserProfileProvider()),
+      ],
       child: const WeGoVroomApp(),
     ),
   );
@@ -60,9 +62,7 @@ class WeGoVroomApp extends StatelessWidget {
         ),
       ),
 
-      home: const StartupSplashScreen(
-        child: AppRouter(),
-      ),
+      home: const StartupSplashScreen(child: AppRouter()),
     );
   }
 }

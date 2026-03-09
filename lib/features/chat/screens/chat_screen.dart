@@ -2,8 +2,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../../utils/responsive.dart';
+import '../../../providers/user_profile_provider.dart';
 import '../../profile/widgets/avatar_utils.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -300,19 +302,22 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessageItem({
     required Map<String, dynamic> data,
-    required Map<String, Map<String, dynamic>> participantMeta,
     required bool mine,
     required Color secondary,
   }) {
     final r = context.rs;
     final senderId = data['senderId']?.toString() ?? '';
-    final meta = participantMeta[senderId] ?? const <String, dynamic>{};
+    final profileProvider = context.watch<UserProfileProvider>();
+    final profile = profileProvider.getUserProfile(senderId);
 
     final senderName =
-        (data['senderName'] ?? meta['name'] ?? (mine ? 'You' : 'User'))
+        (data['senderName'] ??
+                profile?['displayName'] ??
+                profile?['name'] ??
+                (mine ? 'You' : 'User'))
             .toString();
     final avatarIndex = normalizeAvatarIndex(
-      data['senderAvatar'] ?? meta['avatar'],
+      data['senderAvatar'] ?? profile?['avatar'],
     );
 
     final timestamp = _messageTimestamp(data);
@@ -379,10 +384,25 @@ class _ChatScreenState extends State<ChatScreen> {
       child: buildAvatar(avatarIndex, radius: r(13)),
     );
 
-    return Row(
+    final messageWidget = Row(
       mainAxisAlignment: mine ? MainAxisAlignment.end : MainAxisAlignment.start,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: mine ? [bubble, avatar] : [avatar, bubble],
+    );
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 300),
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 20),
+            child: child,
+          ),
+        );
+      },
+      child: messageWidget,
     );
   }
 
@@ -487,23 +507,17 @@ class _ChatScreenState extends State<ChatScreen> {
               _ensureMyProfileLoaded();
             }
 
-            final participantMeta = <String, Map<String, dynamic>>{};
+            final profileProvider = context.read<UserProfileProvider>();
+            final userIds = <String>{};
             for (final d in docs) {
               final data = d.data() as Map<String, dynamic>;
               final pid = data['userId']?.toString();
-              if (pid == null || pid.isEmpty) continue;
-              participantMeta[pid] = {
-                'name': data['name'] ?? 'User',
-                'avatar': normalizeAvatarIndex(data['avatar']),
-              };
+              if (pid != null && pid.isNotEmpty) userIds.add(pid);
             }
-
             final ownerId = tripData['ownerId']?.toString() ?? '';
-            if (ownerId.isNotEmpty && !participantMeta.containsKey(ownerId)) {
-              participantMeta[ownerId] = {
-                'name': tripData['ownerName'] ?? 'Host',
-                'avatar': normalizeAvatarIndex(tripData['ownerAvatar']),
-              };
+            if (ownerId.isNotEmpty) userIds.add(ownerId);
+            for (final id in userIds) {
+              profileProvider.listenToUserProfile(id);
             }
 
             final tripTitle =
@@ -685,7 +699,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
                                   return _buildMessageItem(
                                     data: data,
-                                    participantMeta: participantMeta,
                                     mine: mine,
                                     secondary: secondary,
                                   );
