@@ -1,9 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../providers/auth_provider.dart';
+import '../../profile/widgets/avatar_utils.dart';
 import 'manage_requests_screen.dart';
 
 class TripDetailScreen extends StatefulWidget {
@@ -19,7 +18,6 @@ class TripDetailScreen extends StatefulWidget {
 class _TripDetailScreenState extends State<TripDetailScreen> {
   final db = FirebaseFirestore.instance;
   final List<int> _maxPeopleOptions = [2, 3, 4, 5, 6];
-  final Map<String, Future<Map<String, dynamic>>> _participantInfoCache = {};
 
   bool loading = false;
   bool joinedAlready = false;
@@ -30,6 +28,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final userDoc = await db.collection("users").doc(userId).get();
     final userData = userDoc.data() ?? const <String, dynamic>{};
     final gender = (userData["gender"] ?? "Not set").toString();
+    final displayName = (userData["displayName"] ?? userData["name"] ?? "User")
+        .toString();
+    final avatarIndex = normalizeAvatarIndex(userData["avatar"]);
 
     final completedTripIds = <String>{};
     final now = DateTime.now();
@@ -73,13 +74,146 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       }
     }
 
-    return {"gender": gender, "trips": completedTripIds.length};
+    return {
+      "gender": gender,
+      "trips": completedTripIds.length,
+      "name": displayName,
+      "avatar": avatarIndex,
+    };
   }
 
-  Future<Map<String, dynamic>> _participantInfoCached(String userId) {
-    return _participantInfoCache.putIfAbsent(
-      userId,
-      () => _participantInfo(userId),
+  Widget _buildParticipantTile({
+    required QueryDocumentSnapshot p,
+    required String ownerId,
+    required String? currentUserId,
+    required bool allowReview,
+    required bool allowHostRemove,
+    required bool canCurrentUserReview,
+    required bool loading,
+    required String reviewerName,
+    required Map<String, dynamic> tripData,
+  }) {
+    final data = p.data() as Map<String, dynamic>;
+    final participantId = data["userId"] as String?;
+    final isHost = participantId == ownerId;
+    final showReviewButton =
+        allowReview &&
+        canCurrentUserReview &&
+        participantId != null &&
+        participantId != currentUserId;
+    final canRemove =
+        allowHostRemove && participantId != null && participantId != ownerId;
+
+    if (participantId == null) {
+      return ListTile(
+        leading: const CircleAvatar(
+          backgroundColor: Color(0xffff7a00),
+          child: Icon(Icons.person, color: Colors.white),
+        ),
+        title: Text(data["name"] ?? "User"),
+      );
+    }
+
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _participantInfo(participantId),
+      builder: (_, snap) {
+        if (!snap.hasData) {
+          // Show fallback while loading
+          final fallbackName = data["name"] ?? "User";
+          final fallbackAvatar = normalizeAvatarIndex(data["avatar"]);
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundColor: const Color(0xffff7a00),
+              child: buildAvatar(fallbackAvatar, radius: 20),
+            ),
+            title: Text(fallbackName),
+          );
+        }
+
+        final info = snap.data!;
+        final displayName = info["name"] ?? "User";
+        final avatarIdx = info["avatar"] as int;
+        final gender = (info["gender"] ?? "Not set").toString();
+        final trips = (info["trips"] ?? 0) as int;
+
+        return ListTile(
+          onTap: () => _openUserReviewsBottomSheet(
+            revieweeId: participantId,
+            revieweeName: displayName,
+          ),
+          leading: CircleAvatar(
+            backgroundColor: const Color(0xffff7a00),
+            child: buildAvatar(avatarIdx, radius: 20),
+          ),
+          title: Text(displayName),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isHost) const Text("Host"),
+              Text(
+                "Gender: $gender  |  Trips: $trips",
+                style: TextStyle(color: Colors.grey[700], fontSize: 12),
+              ),
+              StreamBuilder<QuerySnapshot>(
+                stream: db
+                    .collection("tripReviews")
+                    .where("revieweeId", isEqualTo: participantId)
+                    .snapshots(),
+                builder: (_, reviewSnap) {
+                  final summary = _reviewSummaryFromDocs(
+                    List<QueryDocumentSnapshot>.from(
+                      reviewSnap.data?.docs ?? const [],
+                    ),
+                  );
+                  final reviewCount = summary["count"] as int;
+                  final avgRating = (summary["avg"] as double);
+
+                  if (reviewCount == 0) {
+                    return Text(
+                      "No reviews yet",
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    );
+                  }
+
+                  return Text(
+                    "${avgRating.toStringAsFixed(1)}/5 from $reviewCount reviews",
+                    style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                  );
+                },
+              ),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (canRemove)
+                IconButton(
+                  tooltip: "Remove user",
+                  icon: const Icon(Icons.person_remove, color: Colors.red),
+                  onPressed: loading
+                      ? null
+                      : () => _openRemoveParticipantDialog(
+                          participantRef: p.reference,
+                          participantUserId: participantId,
+                          participantName: displayName,
+                          trip: tripData,
+                        ),
+                ),
+              showReviewButton
+                  ? TextButton(
+                      onPressed: () => _openReviewDialog(
+                        reviewerId: currentUserId!,
+                        reviewerName: reviewerName,
+                        revieweeId: participantId,
+                        revieweeName: displayName,
+                      ),
+                      child: const Text("Review"),
+                    )
+                  : const Text("View"),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -117,75 +251,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         pendingRequestId = pendingSnap.docs.first.id;
       });
     }
-  }
-
-  String _tripShareLink() {
-    final uri = Uri.https("wegovroom.app", "/", {"tripId": widget.tripId});
-    return uri.toString();
-  }
-
-  Future<void> _copyTripLink() async {
-    final link = _tripShareLink();
-    await Clipboard.setData(ClipboardData(text: link));
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text("Trip link copied")));
-  }
-
-  Future<void> _shareToWhatsApp() async {
-    final link = _tripShareLink();
-    final text = Uri.encodeComponent("Join my WeGoVroom trip:\n$link");
-    final url = Uri.parse("https://wa.me/?text=$text");
-    final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
-    if (!opened && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Unable to open WhatsApp")));
-    }
-  }
-
-  Future<void> _openShareTripSheet() async {
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Share Trip",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text(_tripShareLink(), style: TextStyle(color: Colors.grey[700])),
-              const SizedBox(height: 16),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.copy),
-                title: const Text("Copy trip link"),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  await _copyTripLink();
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.chat),
-                title: const Text("Share on WhatsApp"),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  await _shareToWhatsApp();
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   Future<bool> _hasActiveOtherTrip(String uid) async {
@@ -665,9 +730,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
     if (!canDeleteTrip) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("You cannot delete this trip")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("You cannot delete this trip")),
+        );
       }
       return;
     }
@@ -1154,7 +1219,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               const SizedBox(height: 12),
               ...docs.map((p) {
                 final data = p.data() as Map<String, dynamic>;
-                final name = data["name"] ?? "User";
                 final participantId = data["userId"] as String?;
                 final isHost = participantId == ownerId;
                 final showReviewButton =
@@ -1167,108 +1231,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                     participantId != null &&
                     participantId != ownerId;
 
-                return ListTile(
-                  onTap: participantId == null
-                      ? null
-                      : () => _openUserReviewsBottomSheet(
-                          revieweeId: participantId,
-                          revieweeName: name,
-                        ),
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0xffff7a00),
-                    child: Icon(Icons.person, color: Colors.white),
-                  ),
-                  title: Text(name),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (isHost) const Text("Host"),
-                      if (participantId != null)
-                        FutureBuilder<Map<String, dynamic>>(
-                          future: _participantInfoCached(participantId),
-                          builder: (_, infoSnap) {
-                            final info =
-                                infoSnap.data ?? const <String, dynamic>{};
-                            final gender = (info["gender"] ?? "Not set")
-                                .toString();
-                            final trips = (info["trips"] ?? 0) as int;
-                            return Text(
-                              "Gender: $gender  |  Trips: $trips",
-                              style: TextStyle(
-                                color: Colors.grey[700],
-                                fontSize: 12,
-                              ),
-                            );
-                          },
-                        ),
-                      if (participantId != null)
-                        StreamBuilder<QuerySnapshot>(
-                          stream: db
-                              .collection("tripReviews")
-                              .where("revieweeId", isEqualTo: participantId)
-                              .snapshots(),
-                          builder: (_, reviewSnap) {
-                            final summary = _reviewSummaryFromDocs(
-                              List<QueryDocumentSnapshot>.from(
-                                reviewSnap.data?.docs ?? const [],
-                              ),
-                            );
-                            final reviewCount = summary["count"] as int;
-                            final avgRating = (summary["avg"] as double);
-
-                            if (reviewCount == 0) {
-                              return Text(
-                                "No reviews yet",
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                ),
-                              );
-                            }
-
-                            return Text(
-                              "${avgRating.toStringAsFixed(1)}/5 from $reviewCount reviews",
-                              style: TextStyle(
-                                color: Colors.grey[700],
-                                fontSize: 12,
-                              ),
-                            );
-                          },
-                        ),
-                    ],
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (canRemove)
-                        IconButton(
-                          tooltip: "Remove user",
-                          icon: const Icon(
-                            Icons.person_remove,
-                            color: Colors.red,
-                          ),
-                          onPressed: loading
-                              ? null
-                              : () => _openRemoveParticipantDialog(
-                                  participantRef: p.reference,
-                                  participantUserId: participantId,
-                                  participantName: name.toString(),
-                                  trip: tripData,
-                                ),
-                        ),
-                      showReviewButton
-                          ? TextButton(
-                              onPressed: () => _openReviewDialog(
-                                reviewerId: currentUserId,
-                                reviewerName: reviewerName,
-                                revieweeId: participantId,
-                                revieweeName: name,
-                              ),
-                              child: const Text("Review"),
-                            )
-                          : const Text("View"),
-                    ],
-                  ),
+                return _buildParticipantTile(
+                  p: p,
+                  ownerId: ownerId,
+                  currentUserId: currentUserId,
+                  allowReview: allowReview,
+                  allowHostRemove: allowHostRemove,
+                  canCurrentUserReview: canCurrentUserReview,
+                  loading: loading,
+                  reviewerName: reviewerName,
+                  tripData: tripData,
                 );
               }),
             ],
@@ -1435,15 +1407,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                                 ),
                               );
                             },
-                          ),
-                        if (isCreator)
-                          IconButton(
-                            icon: const Icon(
-                              Icons.share_outlined,
-                              color: Color(0xffff7a00),
-                            ),
-                            tooltip: "Share trip",
-                            onPressed: _openShareTripSheet,
                           ),
                         if (isCreator && !tripEnded)
                           IconButton(

@@ -33,7 +33,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
     final data = doc.data();
     if (data == null || !mounted) return;
 
@@ -55,14 +58,17 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     if (nameController.text.isEmpty ||
         regController.text.isEmpty ||
         phoneController.text.isEmpty) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Fill all fields')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Fill all fields')));
       return;
     }
 
     setState(() => loading = true);
 
-    final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final userRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid);
     final existingDoc = await userRef.get();
 
     final payload = <String, dynamic>{
@@ -80,6 +86,62 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     }
 
     await userRef.set(payload, SetOptions(merge: true));
+
+    // propagate updated name/avatar throughout the app
+    try {
+      final displayName = nameController.text;
+      final avatar = avatarIndex;
+      final firestore = FirebaseFirestore.instance;
+      final batch = firestore.batch();
+
+      // update trips owned by this user
+      final tripsSnap = await firestore
+          .collection('trips')
+          .where('ownerId', isEqualTo: user.uid)
+          .get();
+      for (final doc in tripsSnap.docs) {
+        batch.update(doc.reference, {
+          'ownerName': displayName,
+          'ownerAvatar': avatar,
+        });
+      }
+
+      // update participation records
+      final partsSnap = await firestore
+          .collection('tripParticipants')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+      for (final doc in partsSnap.docs) {
+        batch.update(doc.reference, {'name': displayName, 'avatar': avatar});
+      }
+
+      // update any pending/processed trip requests
+      final reqSnap = await firestore
+          .collection('tripRequests')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+      for (final doc in reqSnap.docs) {
+        batch.update(doc.reference, {'name': displayName, 'avatar': avatar});
+      }
+
+      // update sender info on existing chat messages
+      final msgSnap = await firestore
+          .collection('tripMessages')
+          .where('senderId', isEqualTo: user.uid)
+          .get();
+      for (final doc in msgSnap.docs) {
+        batch.update(doc.reference, {
+          'senderName': displayName,
+          'senderAvatar': avatar,
+        });
+      }
+
+      await batch.commit();
+    } catch (e) {
+      // silently ignore any errors updating references
+      debugPrint('Failed to propagate profile changes: $e');
+    }
+
     await PushNotificationService.instance.syncCurrentUserToken();
 
     auth.refresh();
@@ -114,7 +176,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       if (!context.mounted) return;
                       Navigator.pushAndRemoveUntil(
                         context,
-                        MaterialPageRoute(builder: (_) => const LandingScreen()),
+                        MaterialPageRoute(
+                          builder: (_) => const LandingScreen(),
+                        ),
                         (_) => false,
                       );
                     },
@@ -123,10 +187,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 ),
                 const Text(
                   'Complete Your Profile',
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 24),
                 Container(
@@ -139,11 +200,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: 10,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 5,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 5,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
                     itemBuilder: (_, i) {
                       final selected = avatarIndex == i;
 
@@ -187,8 +249,14 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         ),
                         items: const [
                           DropdownMenuItem(value: 'Male', child: Text('Male')),
-                          DropdownMenuItem(value: 'Female', child: Text('Female')),
-                          DropdownMenuItem(value: 'Other', child: Text('Other')),
+                          DropdownMenuItem(
+                            value: 'Female',
+                            child: Text('Female'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Other',
+                            child: Text('Other'),
+                          ),
                         ],
                         onChanged: (v) => setState(() => gender = v.toString()),
                       ),
@@ -222,7 +290,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         onTap: loading ? null : completeProfile,
                         child: Center(
                           child: loading
-                              ? const CircularProgressIndicator(color: Colors.white)
+                              ? const CircularProgressIndicator(
+                                  color: Colors.white,
+                                )
                               : const Text(
                                   'Complete Setup',
                                   style: TextStyle(
