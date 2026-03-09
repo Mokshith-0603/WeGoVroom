@@ -19,6 +19,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final db = FirebaseFirestore.instance;
   final uid = FirebaseAuth.instance.currentUser?.uid;
   final controller = TextEditingController();
+  late final ScrollController _scrollController;
 
   bool _canChat = false;
   String? _effectiveTripId;
@@ -31,6 +32,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _scrollController = ScrollController();
     _effectiveTripId = widget.tripId;
     if (_effectiveTripId == null) {
       _tripResolutionFuture = _resolveFallbackTripId();
@@ -50,7 +52,9 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _queueTripResolution({String? excludeTripId}) {
-    _tripResolutionFuture = _resolveFallbackTripId(excludeTripId: excludeTripId);
+    _tripResolutionFuture = _resolveFallbackTripId(
+      excludeTripId: excludeTripId,
+    );
   }
 
   void _setEffectiveTripId(String? tripId) {
@@ -177,6 +181,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     controller.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -421,18 +426,16 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
 
-        final tripData =
-            tripSnap.data?.data() as Map<String, dynamic>?;
-        final isActiveTrip =
-            tripData != null && _isTripActive(tripData);
+        final tripData = tripSnap.data?.data() as Map<String, dynamic>?;
+        final isActiveTrip = tripData != null && _isTripActive(tripData);
 
         if (!isActiveTrip) {
           return FutureBuilder<String?>(
-            future: _tripResolutionFuture ??=
-                _resolveFallbackTripId(excludeTripId: _effectiveTripId),
+            future: _tripResolutionFuture ??= _resolveFallbackTripId(
+              excludeTripId: _effectiveTripId,
+            ),
             builder: (context, nextSnap) {
-              if (nextSnap.connectionState ==
-                  ConnectionState.waiting) {
+              if (nextSnap.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );
@@ -644,10 +647,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                 final bd =
                                     (b.data() as Map<String, dynamic>?) ??
                                     const <String, dynamic>{};
-                                final at =
-                                    _messageTimestamp(ad)?.toDate();
-                                final bt =
-                                    _messageTimestamp(bd)?.toDate();
+                                final at = _messageTimestamp(ad)?.toDate();
+                                final bt = _messageTimestamp(bd)?.toDate();
                                 if (at == null && bt == null) {
                                   return a.id.compareTo(b.id);
                                 }
@@ -658,7 +659,19 @@ class _ChatScreenState extends State<ChatScreen> {
                                 return a.id.compareTo(b.id);
                               });
 
+                              // Scroll to last message after widget builds
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (_scrollController.hasClients) {
+                                  _scrollController.animateTo(
+                                    _scrollController.position.maxScrollExtent,
+                                    duration: const Duration(milliseconds: 300),
+                                    curve: Curves.easeOut,
+                                  );
+                                }
+                              });
+
                               return ListView.builder(
+                                controller: _scrollController,
                                 padding: EdgeInsets.symmetric(
                                   horizontal: r(12),
                                   vertical: r(12),
