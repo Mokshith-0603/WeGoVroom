@@ -8,6 +8,7 @@ import '../../notifications/screens/notifications_screen.dart';
 import '../../profile/widgets/profile_drawer.dart';
 import '../../profile/widgets/avatar_utils.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/user_profile_provider.dart';
 import '../../../utils/responsive.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -30,14 +31,15 @@ class _HomeScreenState extends State<HomeScreen> {
   String selectedChip = "All";
   String _searchQuery = "";
   bool _isCheckingCreateTrip = false;
-  late final Future<Map<String, dynamic>> _userProfileFuture;
-  Map<String, dynamic> _userProfile = const {"name": "", "avatar": 0};
 
   @override
   void initState() {
     super.initState();
-    _userProfileFuture = _loadUserProfileSnapshot();
-    _loadUserProfile();
+    final auth = context.read<AuthProvider>();
+    final profileProvider = context.read<UserProfileProvider>();
+    if (auth.user != null) {
+      profileProvider.listenToUserProfile(auth.user!.uid);
+    }
   }
 
   Future<bool> hasActiveTrip(String uid) async {
@@ -107,45 +109,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return false;
-  }
-
-  Future<void> _loadUserProfile() async {
-    final user = context.read<AuthProvider>().user;
-    if (user == null) {
-      return;
-    }
-
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-    final data = doc.data();
-
-    if (!mounted) return;
-    setState(() {
-      _userProfile = {
-        "name": data?['displayName'] ?? user.email?.split('@').first ?? "",
-        "avatar": normalizeAvatarIndex(data?['avatar']),
-      };
-    });
-  }
-
-  Future<Map<String, dynamic>> _loadUserProfileSnapshot() async {
-    final user = context.read<AuthProvider>().user;
-    if (user == null) {
-      return const {"name": "", "avatar": 0};
-    }
-
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
-    final data = doc.data();
-
-    return {
-      "name": data?['displayName'] ?? user.email?.split('@').first ?? "",
-      "avatar": normalizeAvatarIndex(data?['avatar']),
-    };
   }
 
   Future<void> _onCreateTripPressed() async {
@@ -228,10 +191,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     Builder(
                       builder: (context) {
+                        final profileProvider = context
+                            .watch<UserProfileProvider>();
+                        final auth = context.watch<AuthProvider>();
+                        final profile = auth.user != null
+                            ? profileProvider.getUserProfile(auth.user!.uid)
+                            : null;
                         return GestureDetector(
                           onTap: () => Scaffold.of(context).openDrawer(),
                           child: buildAvatar(
-                            (_userProfile["avatar"] ?? 0) as int,
+                            normalizeAvatarIndex(profile?["avatar"]),
                             radius: r(22),
                           ),
                         );
@@ -246,11 +215,21 @@ class _HomeScreenState extends State<HomeScreen> {
                             greeting(),
                             style: const TextStyle(fontWeight: FontWeight.w500),
                           ),
-                          FutureBuilder<Map<String, dynamic>>(
-                            future: _userProfileFuture,
-                            builder: (_, snap) {
-                              final name = (snap.data?["name"] ?? "")
-                                  .toString();
+                          Builder(
+                            builder: (context) {
+                              final profileProvider = context
+                                  .watch<UserProfileProvider>();
+                              final auth = context.watch<AuthProvider>();
+                              final profile = auth.user != null
+                                  ? profileProvider.getUserProfile(
+                                      auth.user!.uid,
+                                    )
+                                  : null;
+                              final name =
+                                  (profile?["displayName"] ??
+                                          profile?["name"] ??
+                                          "")
+                                      .toString();
                               if (name.isEmpty) return const SizedBox.shrink();
                               return Text(
                                 'Hi 👋 $name',
