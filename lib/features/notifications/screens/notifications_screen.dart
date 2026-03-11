@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../../providers/user_profile_provider.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -84,6 +87,15 @@ class NotificationsScreen extends StatelessWidget {
             );
           }
 
+          final profileProvider = context.read<UserProfileProvider>();
+          for (final doc in docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            final actorId = (data['actorId'] ?? '').toString().trim();
+            if (actorId.isNotEmpty) {
+              profileProvider.listenToUserProfile(actorId);
+            }
+          }
+
           return ListView.separated(
             padding: const EdgeInsets.all(12),
             itemCount: docs.length,
@@ -107,8 +119,23 @@ class _NotificationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appearance = _NotificationAppearance.from(data);
-    final message = (data['message'] ?? '').toString();
-    final actorName = (data['actorName'] ?? '').toString().trim();
+    final actorId = (data['actorId'] ?? '').toString().trim();
+    final storedMessage = (data['message'] ?? '').toString();
+    final storedActorName = (data['actorName'] ?? '').toString().trim();
+    final actorProfile = actorId.isNotEmpty
+        ? context.watch<UserProfileProvider>().getUserProfile(actorId)
+        : null;
+    final actorName =
+        (actorProfile?['displayName'] ??
+                actorProfile?['name'] ??
+                storedActorName)
+            .toString()
+            .trim();
+    final message = _replaceActorName(
+      storedMessage,
+      oldName: storedActorName,
+      newName: actorName,
+    );
     final createdAt = data['createdAt'] as Timestamp?;
     final tripId = (data['tripId'] ?? '').toString().trim();
 
@@ -237,6 +264,18 @@ class _NotificationCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _replaceActorName(
+  String message, {
+  required String oldName,
+  required String newName,
+}) {
+  if (message.isEmpty || oldName.isEmpty || newName.isEmpty || oldName == newName) {
+    return message;
+  }
+
+  return message.replaceFirst(oldName, newName);
 }
 
 class _MetaChip extends StatelessWidget {

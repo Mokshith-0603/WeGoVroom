@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/auth_provider.dart';
+import '../../../providers/user_profile_provider.dart';
 import '../../../services/push_notification_service.dart';
 import '../../auth/screens/landing_screen.dart';
 import '../widgets/avatar_utils.dart';
@@ -87,60 +90,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
     await userRef.set(payload, SetOptions(merge: true));
 
-    // propagate updated name/avatar throughout the app
-    try {
-      final displayName = nameController.text;
-      final avatar = avatarIndex;
-      final firestore = FirebaseFirestore.instance;
-      final batch = firestore.batch();
-
-      // update trips owned by this user
-      final tripsSnap = await firestore
-          .collection('trips')
-          .where('ownerId', isEqualTo: user.uid)
-          .get();
-      for (final doc in tripsSnap.docs) {
-        batch.update(doc.reference, {
-          'ownerName': displayName,
-          'ownerAvatar': avatar,
-        });
-      }
-
-      // update participation records
-      final partsSnap = await firestore
-          .collection('tripParticipants')
-          .where('userId', isEqualTo: user.uid)
-          .get();
-      for (final doc in partsSnap.docs) {
-        batch.update(doc.reference, {'name': displayName, 'avatar': avatar});
-      }
-
-      // update any pending/processed trip requests
-      final reqSnap = await firestore
-          .collection('tripRequests')
-          .where('userId', isEqualTo: user.uid)
-          .get();
-      for (final doc in reqSnap.docs) {
-        batch.update(doc.reference, {'name': displayName, 'avatar': avatar});
-      }
-
-      // update sender info on existing chat messages
-      final msgSnap = await firestore
-          .collection('tripMessages')
-          .where('senderId', isEqualTo: user.uid)
-          .get();
-      for (final doc in msgSnap.docs) {
-        batch.update(doc.reference, {
-          'senderName': displayName,
-          'senderAvatar': avatar,
-        });
-      }
-
-      await batch.commit();
-    } catch (e) {
-      // silently ignore any errors updating references
-      debugPrint('Failed to propagate profile changes: $e');
-    }
+    final profileProvider = context.read<UserProfileProvider>();
+    profileProvider.listenToUserProfile(user.uid);
+    profileProvider.setCachedUserProfile(user.uid, payload);
+    unawaited(_propagateProfileChanges(user.uid));
 
     await PushNotificationService.instance.syncCurrentUserToken();
 
@@ -149,6 +102,56 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     if (!mounted) return;
 
     Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
+  }
+
+  Future<void> _propagateProfileChanges(String userId) async {
+    try {
+      final firestore = FirebaseFirestore.instance;
+      final displayName = nameController.text.trim();
+      final avatar = avatarIndex;
+      final snapshots = await Future.wait([
+        firestore.collection('trips').where('ownerId', isEqualTo: userId).get(),
+        firestore
+            .collection('tripParticipants')
+            .where('userId', isEqualTo: userId)
+            .get(),
+        firestore.collection('tripRequests').where('userId', isEqualTo: userId).get(),
+        firestore.collection('tripMessages').where('senderId', isEqualTo: userId).get(),
+      ]);
+
+      final tripDocs = snapshots[0].docs;
+      final participantDocs = snapshots[1].docs;
+      final requestDocs = snapshots[2].docs;
+      final messageDocs = snapshots[3].docs;
+
+      final operations = <({DocumentReference<Map<String, dynamic>> ref, Map<String, dynamic> data})>[
+        for (final doc in tripDocs)
+          (
+            ref: doc.reference,
+            data: {'ownerName': displayName, 'ownerAvatar': avatar},
+          ),
+        for (final doc in participantDocs)
+          (ref: doc.reference, data: {'name': displayName, 'avatar': avatar}),
+        for (final doc in requestDocs)
+          (ref: doc.reference, data: {'name': displayName, 'avatar': avatar}),
+        for (final doc in messageDocs)
+          (
+            ref: doc.reference,
+            data: {'senderName': displayName, 'senderAvatar': avatar},
+          ),
+      ];
+
+      for (var i = 0; i < operations.length; i += 400) {
+        final batch = firestore.batch();
+        final chunk = operations.skip(i).take(400);
+        for (final operation in chunk) {
+          batch.update(operation.ref, operation.data);
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint('Failed to propagate profile changes: $e');
+    }
   }
 
   @override

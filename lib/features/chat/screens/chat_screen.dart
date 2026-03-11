@@ -109,8 +109,13 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_profileLoaded || uid == null) return;
 
     try {
-      final doc = await db.collection('users').doc(uid).get();
-      final data = doc.data() ?? const <String, dynamic>{};
+      final profileProvider = context.read<UserProfileProvider>();
+      profileProvider.listenToUserProfile(uid!);
+      final cachedProfile = profileProvider.getUserProfile(uid!);
+      final data =
+          cachedProfile ??
+          (await db.collection('users').doc(uid).get()).data() ??
+          const <String, dynamic>{};
       _myName = (data['displayName'] ?? data['name'] ?? 'User').toString();
       _myAvatar = normalizeAvatarIndex(data['avatar']);
     } catch (_) {
@@ -278,13 +283,22 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty) return;
 
     await _ensureMyProfileLoaded();
+    final liveProfile =
+        context.read<UserProfileProvider>().getUserProfile(uid!) ??
+        const <String, dynamic>{};
+    final senderName =
+        (liveProfile['displayName'] ?? liveProfile['name'] ?? _myName)
+            .toString();
+    final senderAvatar = normalizeAvatarIndex(
+      liveProfile['avatar'] ?? _myAvatar,
+    );
 
     try {
       await db.collection('tripMessages').add({
         'tripId': _effectiveTripId,
         'senderId': uid,
-        'senderName': _myName,
-        'senderAvatar': _myAvatar,
+        'senderName': senderName,
+        'senderAvatar': senderAvatar,
         'text': text,
         // Used for immediate local ordering while server timestamp resolves.
         'createdAtLocal': Timestamp.now(),
@@ -311,13 +325,13 @@ class _ChatScreenState extends State<ChatScreen> {
     final profile = profileProvider.getUserProfile(senderId);
 
     final senderName =
-        (data['senderName'] ??
-                profile?['displayName'] ??
+        (profile?['displayName'] ??
                 profile?['name'] ??
+                data['senderName'] ??
                 (mine ? 'You' : 'User'))
             .toString();
     final avatarIndex = normalizeAvatarIndex(
-      data['senderAvatar'] ?? profile?['avatar'],
+      profile?['avatar'] ?? data['senderAvatar'],
     );
 
     final timestamp = _messageTimestamp(data);
@@ -409,6 +423,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     if (uid == null) return _noTrip();
+    context.read<UserProfileProvider>().listenToUserProfile(uid!);
 
     final secondary = Theme.of(context).colorScheme.secondary;
     final r = context.rs;
@@ -653,8 +668,20 @@ class _ChatScreenState extends State<ChatScreen> {
                                 );
                               }
 
-                              final messageDocs = [...rawDocs];
-                              messageDocs.sort((a, b) {
+                               final messageDocs = [...rawDocs];
+                               final profileProvider =
+                                   context.read<UserProfileProvider>();
+                               for (final doc in messageDocs) {
+                                 final data =
+                                     doc.data() as Map<String, dynamic>? ??
+                                     const <String, dynamic>{};
+                                 final senderId =
+                                     data['senderId']?.toString() ?? '';
+                                 if (senderId.isNotEmpty) {
+                                   profileProvider.listenToUserProfile(senderId);
+                                 }
+                               }
+                               messageDocs.sort((a, b) {
                                 final ad =
                                     (a.data() as Map<String, dynamic>?) ??
                                     const <String, dynamic>{};
