@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../providers/user_profile_provider.dart';
 import '../../profile/widgets/avatar_utils.dart';
 import 'manage_requests_screen.dart';
 
@@ -24,81 +25,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   bool hasPendingRequest = false;
   String? pendingRequestId;
 
-  Future<Map<String, Map<String, dynamic>>> _loadAllParticipantInfos(
-    List<QueryDocumentSnapshot> docs,
-  ) async {
-    final userIds = <String>{};
-    for (final doc in docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final uid = data['userId'] as String?;
-      if (uid != null) userIds.add(uid);
-    }
-
-    final infos = <String, Map<String, dynamic>>{};
-    for (final uid in userIds) {
-      infos[uid] = await _participantInfo(uid);
-    }
-    return infos;
-  }
-
-  Future<Map<String, dynamic>> _participantInfo(String userId) async {
-    final userDoc = await db.collection("users").doc(userId).get();
-    final userData = userDoc.data() ?? const <String, dynamic>{};
-    final gender = (userData["gender"] ?? "Not set").toString();
-    final displayName = (userData["displayName"] ?? userData["name"] ?? "User")
-        .toString();
-    final avatarIndex = normalizeAvatarIndex(userData["avatar"]);
-
-    final completedTripIds = <String>{};
-    final now = DateTime.now();
-
-    final ownerTrips = await db
-        .collection("trips")
-        .where("ownerId", isEqualTo: userId)
-        .get();
-    for (final doc in ownerTrips.docs) {
-      final data = doc.data();
-      DateTime? dt;
-      try {
-        dt = (data["dateTime"] as Timestamp?)?.toDate();
-      } catch (_) {}
-      final autoEnded =
-          dt != null && !now.isBefore(dt.add(const Duration(hours: 12)));
-      if (data["completed"] == true || autoEnded) {
-        completedTripIds.add(doc.id);
-      }
-    }
-
-    final joinedParts = await db
-        .collection("tripParticipants")
-        .where("userId", isEqualTo: userId)
-        .get();
-    for (final p in joinedParts.docs) {
-      final tripId = p.data()["tripId"] as String?;
-      if (tripId == null || tripId.isEmpty || completedTripIds.contains(tripId))
-        continue;
-      final tripDoc = await db.collection("trips").doc(tripId).get();
-      if (!tripDoc.exists) continue;
-      final tripData = tripDoc.data() ?? const <String, dynamic>{};
-      DateTime? dt;
-      try {
-        dt = (tripData["dateTime"] as Timestamp?)?.toDate();
-      } catch (_) {}
-      final autoEnded =
-          dt != null && !now.isBefore(dt.add(const Duration(hours: 12)));
-      if (tripData["completed"] == true || autoEnded) {
-        completedTripIds.add(tripId);
-      }
-    }
-
-    return {
-      "gender": gender,
-      "trips": completedTripIds.length,
-      "name": displayName,
-      "avatar": avatarIndex,
-    };
-  }
-
   Widget _buildParticipantTile({
     required QueryDocumentSnapshot p,
     required String ownerId,
@@ -109,7 +35,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     required bool loading,
     required String reviewerName,
     required Map<String, dynamic> tripData,
-    required Map<String, dynamic>? participantInfo,
   }) {
     final data = p.data() as Map<String, dynamic>;
     final participantId = data["userId"] as String?;
@@ -132,21 +57,16 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       );
     }
 
-    if (participantInfo == null) {
-      // Loading state
-      return ListTile(
-        leading: const CircleAvatar(
-          backgroundColor: Color(0xffff7a00),
-          child: CircularProgressIndicator(),
-        ),
-        title: Text(data["name"] ?? "User"),
-      );
-    }
-
-    final displayName = participantInfo["name"] ?? "User";
-    final avatarIdx = participantInfo["avatar"] as int;
-    final gender = (participantInfo["gender"] ?? "Not set").toString();
-    final trips = (participantInfo["trips"] ?? 0) as int;
+    final profile = context.watch<UserProfileProvider>().getUserProfile(
+      participantId,
+    );
+    final displayName =
+        (profile?["displayName"] ?? profile?["name"] ?? data["name"] ?? "User")
+            .toString();
+    final avatarIdx = normalizeAvatarIndex(
+      profile?["avatar"] ?? data["avatar"],
+    );
+    final gender = (profile?["gender"] ?? "Not set").toString();
 
     return ListTile(
       onTap: () => _openUserReviewsBottomSheet(
@@ -162,10 +82,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (isHost) const Text("Host"),
-          Text(
-            "Gender: $gender  |  Trips: $trips",
-            style: TextStyle(color: Colors.grey[700], fontSize: 12),
-          ),
+          if (gender.isNotEmpty && gender != "Not set")
+            Text(
+              "Gender: $gender",
+              style: TextStyle(color: Colors.grey[700], fontSize: 12),
+            ),
           StreamBuilder<QuerySnapshot>(
             stream: db
                 .collection("tripReviews")
@@ -1196,73 +1117,67 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           return 0;
         });
 
-        return FutureBuilder<Map<String, Map<String, dynamic>>>(
-          future: _loadAllParticipantInfos(docs),
-          builder: (context, infoSnap) {
-            final infos = infoSnap.data ?? {};
+        final profileProvider = context.read<UserProfileProvider>();
+        for (final doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final participantId = data["userId"]?.toString() ?? "";
+          if (participantId.isNotEmpty) {
+            profileProvider.listenToUserProfile(participantId);
+          }
+        }
 
-            String reviewerName = "User";
-            if (currentUserId != null) {
-              if (currentUserId == ownerId) {
-                reviewerName = ownerName;
-              }
-              for (final doc in docs) {
-                final data = doc.data() as Map<String, dynamic>;
-                if (data["userId"] == currentUserId) {
-                  reviewerName = data["name"] ?? "User";
-                  break;
-                }
-              }
+        String reviewerName = "User";
+        if (currentUserId != null) {
+          if (currentUserId == ownerId) {
+            reviewerName = ownerName;
+          }
+          for (final doc in docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            if (data["userId"] == currentUserId) {
+              final liveProfile = profileProvider.getUserProfile(currentUserId);
+              reviewerName =
+                  (liveProfile?["displayName"] ??
+                          liveProfile?["name"] ??
+                          data["name"] ??
+                          "User")
+                      .toString();
+              break;
             }
+          }
+        }
 
-            final canCurrentUserReview =
-                currentUserId != null &&
-                (currentUserId == ownerId ||
-                    docs.any((d) {
-                      final data = d.data() as Map<String, dynamic>;
-                      return data["userId"] == currentUserId;
-                    }));
+        final canCurrentUserReview =
+            currentUserId != null &&
+            (currentUserId == ownerId ||
+                docs.any((d) {
+                  final data = d.data() as Map<String, dynamic>;
+                  return data["userId"] == currentUserId;
+                }));
 
-            return _card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Participants",
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  ...docs.map((p) {
-                    final data = p.data() as Map<String, dynamic>;
-                    final participantId = data["userId"] as String?;
-                    final isHost = participantId == ownerId;
-                    final showReviewButton =
-                        allowReview &&
-                        canCurrentUserReview &&
-                        participantId != null &&
-                        participantId != currentUserId;
-                    final canRemove =
-                        allowHostRemove &&
-                        participantId != null &&
-                        participantId != ownerId;
-
-                    return _buildParticipantTile(
-                      p: p,
-                      ownerId: ownerId,
-                      currentUserId: currentUserId,
-                      allowReview: allowReview,
-                      allowHostRemove: allowHostRemove,
-                      canCurrentUserReview: canCurrentUserReview,
-                      loading: loading,
-                      reviewerName: reviewerName,
-                      tripData: tripData,
-                      participantInfo: infos[participantId],
-                    );
-                  }),
-                ],
+        return _card(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Participants",
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-            );
-          },
+              const SizedBox(height: 12),
+              ...docs.map((p) {
+                return _buildParticipantTile(
+                  p: p,
+                  ownerId: ownerId,
+                  currentUserId: currentUserId,
+                  allowReview: allowReview,
+                  allowHostRemove: allowHostRemove,
+                  canCurrentUserReview: canCurrentUserReview,
+                  loading: loading,
+                  reviewerName: reviewerName,
+                  tripData: tripData,
+                );
+              }),
+            ],
+          ),
         );
       },
     );

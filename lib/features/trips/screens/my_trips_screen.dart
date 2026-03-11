@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import '../../../providers/user_profile_provider.dart';
 import '../../../utils/responsive.dart';
 import '../../../utils/transport_icons.dart';
 import 'manage_requests_screen.dart';
@@ -108,6 +111,19 @@ class MyTripsScreen extends StatelessWidget {
     final r = context.rs;
     final tripIcon = destinationTransportIcon(data["to"]?.toString());
     final tripDateTime = _tripDateTime(data);
+    final ownerId = (data["ownerId"] ?? "").toString();
+    if (ownerId.isNotEmpty) {
+      context.read<UserProfileProvider>().listenToUserProfile(ownerId);
+    }
+    final ownerProfile = ownerId.isNotEmpty
+        ? context.watch<UserProfileProvider>().getUserProfile(ownerId)
+        : null;
+    final ownerName =
+        (ownerProfile?["displayName"] ??
+                ownerProfile?["name"] ??
+                data["ownerName"] ??
+                "")
+            .toString();
 
     return InkWell(
       borderRadius: BorderRadius.circular(r(18)),
@@ -148,7 +164,7 @@ class MyTripsScreen extends StatelessWidget {
             ),
             SizedBox(height: r(4)),
             Text(
-              "Host: ${data["ownerName"] ?? ""}",
+              "Host: $ownerName",
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: Colors.grey[700],
               ),

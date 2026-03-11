@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/user_profile_provider.dart';
 import '../features/trips/screens/trip_detail_screen.dart';
 import '../utils/responsive.dart';
 import '../utils/transport_icons.dart';
@@ -16,7 +18,19 @@ class TripCard extends StatelessWidget {
     final max = data["maxPeople"] ?? 4;
     final seatsLeft = (max - joined).clamp(0, max);
     final isPublic = data["isPublic"] ?? true;
-    final ownerName = data["ownerName"] ?? "Trip Host";
+    final ownerId = (data["ownerId"] ?? "").toString();
+    if (ownerId.isNotEmpty) {
+      context.read<UserProfileProvider>().listenToUserProfile(ownerId);
+    }
+    final ownerProfile = ownerId.isNotEmpty
+        ? context.watch<UserProfileProvider>().getUserProfile(ownerId)
+        : null;
+    final ownerName =
+        (ownerProfile?["displayName"] ??
+                ownerProfile?["name"] ??
+                data["ownerName"] ??
+                "Trip Host")
+            .toString();
     final tripIcon = destinationTransportIcon(data["to"]?.toString());
 
     DateTime? dt;
