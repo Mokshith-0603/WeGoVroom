@@ -8,6 +8,7 @@ import '../../feedback/screens/admin_feedbacks_screen.dart';
 import '../../feedback/screens/feedback_form_screen.dart';
 import '../../notifications/screens/admin_notifications_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
+import '../../notifications/widgets/notification_indicator_icon.dart';
 import '../screens/received_reviews_screen.dart';
 import '../../auth/screens/change_password_screen.dart';
 import '../screens/profile_setup_screen.dart';
@@ -284,7 +285,9 @@ class _ProfileDrawerState extends State<ProfileDrawer> {
                     },
                   ),
                   ListTile(
-                    leading: const Icon(Icons.notifications_none),
+                    leading: const NotificationIndicatorIcon(
+                      icon: Icons.notifications_none,
+                    ),
                     title: const Text('Notifications'),
                     onTap: () {
                       Navigator.of(context).push(

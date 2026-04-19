@@ -70,6 +70,7 @@ class _AdminNotificationsScreenState extends State<AdminNotificationsScreen> {
           "message": message,
           "type": "admin_announcement",
           "senderRole": "admin",
+          "isRead": false,
           "createdAt": FieldValue.serverTimestamp(),
           "createdBy": _auth.currentUser?.uid,
         });

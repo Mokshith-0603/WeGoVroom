@@ -6,8 +6,56 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/user_profile_provider.dart';
 
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
+
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  bool _markingAsRead = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _markNotificationsAsRead();
+    });
+  }
+
+  Future<void> _markNotificationsAsRead() async {
+    if (_markingAsRead) return;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _markingAsRead = true;
+    try {
+      final notificationsSnap = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('userId', isEqualTo: user.uid)
+          .get();
+
+      final unreadDocs = notificationsSnap.docs
+          .where((doc) => doc.data()['isRead'] != true)
+          .toList();
+
+      if (unreadDocs.isEmpty) return;
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (final doc in unreadDocs) {
+        batch.update(doc.reference, {
+          'isRead': true,
+          'readAt': FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    } catch (_) {
+      // If marking read fails, the badge will remain until the next successful visit.
+    } finally {
+      _markingAsRead = false;
+    }
+  }
 
   static const _accent = Color(0xffff7a00);
 
@@ -59,10 +107,14 @@ class NotificationsScreen extends StatelessWidget {
             );
           }
 
-          final docs = List<QueryDocumentSnapshot>.from(snap.data?.docs ?? const []);
+          final docs = List<QueryDocumentSnapshot>.from(
+            snap.data?.docs ?? const [],
+          );
           docs.sort((a, b) {
-            final da = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-            final db = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            final da =
+                (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
+            final db =
+                (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
             final ta = da?.toDate();
             final tb = db?.toDate();
             if (ta == null && tb == null) return 0;
@@ -119,6 +171,7 @@ class _NotificationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final appearance = _NotificationAppearance.from(data);
+    final isUnread = data['isRead'] != true;
     final actorId = (data['actorId'] ?? '').toString().trim();
     final storedMessage = (data['message'] ?? '').toString();
     final storedActorName = (data['actorName'] ?? '').toString().trim();
@@ -195,7 +248,9 @@ class _NotificationCard extends StatelessWidget {
                             ),
                           ),
                           _Badge(
-                            label: appearance.badgeLabel,
+                            label: isUnread
+                                ? '${appearance.badgeLabel}  NEW'
+                                : appearance.badgeLabel,
                             background: appearance.badgeBackground,
                             foreground: appearance.badgeForeground,
                           ),
@@ -271,7 +326,10 @@ String _replaceActorName(
   required String oldName,
   required String newName,
 }) {
-  if (message.isEmpty || oldName.isEmpty || newName.isEmpty || oldName == newName) {
+  if (message.isEmpty ||
+      oldName.isEmpty ||
+      newName.isEmpty ||
+      oldName == newName) {
     return message;
   }
 
