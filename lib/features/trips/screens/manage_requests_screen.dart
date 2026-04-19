@@ -113,6 +113,7 @@ class ManageRequestsScreen extends StatelessWidget {
             "tripId": tripId,
             "actorId": uid,
             "actorName": "Host",
+            "isRead": false,
             "createdAt": FieldValue.serverTimestamp(),
           });
         } catch (_) {}
@@ -157,6 +158,7 @@ class ManageRequestsScreen extends StatelessWidget {
             "tripId": tripId,
             "actorId": uid,
             "actorName": "Host",
+            "isRead": false,
             "createdAt": FieldValue.serverTimestamp(),
           });
         } catch (_) {}

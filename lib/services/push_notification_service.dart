@@ -3,17 +3,26 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../firebase_options.dart';
+
 @pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {}
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+}
 
 class PushNotificationService {
   PushNotificationService._();
 
   static final PushNotificationService instance = PushNotificationService._();
+  static const String channelId = 'wegovroom_notifications';
+  static const String channelName = 'WeGoVroom Notifications';
+  static const String channelDescription =
+      'Notifications for trip updates and admin alerts';
 
   final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -26,9 +35,9 @@ class PushNotificationService {
   String? _lastSyncedUserId;
 
   static const AndroidNotificationChannel _channel = AndroidNotificationChannel(
-    'wegovroom_notifications',
-    'WeGoVroom Notifications',
-    description: 'Notifications for trip updates and admin alerts',
+    channelId,
+    channelName,
+    description: channelDescription,
     importance: Importance.high,
   );
 
@@ -74,11 +83,14 @@ class PushNotificationService {
   }
 
   Future<void> _requestPermission() async {
-    await _messaging.requestPermission(
+    final settings = await _messaging.requestPermission(
       alert: true,
       badge: true,
       sound: true,
       provisional: false,
+    );
+    debugPrint(
+      'Push notification permission status: ${settings.authorizationStatus}',
     );
   }
 

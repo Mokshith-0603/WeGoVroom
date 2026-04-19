@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../widgets/trip_card.dart';
 import '../../trips/screens/create_trip_screen.dart';
 import '../../notifications/screens/notifications_screen.dart';
+import '../../notifications/widgets/notification_indicator_icon.dart';
 import '../../profile/widgets/profile_drawer.dart';
 import '../../profile/widgets/avatar_utils.dart';
 import '../../../providers/auth_provider.dart';
@@ -244,7 +245,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.notifications_none),
+                      icon: const NotificationIndicatorIcon(
+                        icon: Icons.notifications_none,
+                      ),
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(

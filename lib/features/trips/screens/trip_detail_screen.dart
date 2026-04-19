@@ -294,6 +294,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             "tripId": widget.tripId,
             "actorId": user.uid,
             "actorName": name,
+            "isRead": false,
             "createdAt": FieldValue.serverTimestamp(),
           });
         } catch (_) {}
@@ -375,6 +376,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           "tripId": widget.tripId,
           "actorId": user.uid,
           "actorName": name,
+          "isRead": false,
           "createdAt": FieldValue.serverTimestamp(),
         });
       } catch (_) {}
@@ -506,6 +508,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           "tripId": widget.tripId,
           "actorId": user.uid,
           "actorName": userName,
+          "isRead": false,
           "createdAt": FieldValue.serverTimestamp(),
         });
       } catch (_) {}
@@ -631,6 +634,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           "tripId": widget.tripId,
           "actorId": context.read<AuthProvider>().user?.uid,
           "actorName": actorName,
+          "isRead": false,
           "createdAt": FieldValue.serverTimestamp(),
         });
       } catch (_) {}
