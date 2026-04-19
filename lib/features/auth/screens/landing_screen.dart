@@ -61,6 +61,30 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
+  Future<void> signInWithGoogle() async {
+    setState(() => loading = true);
+
+    final auth = context.read<AuthProvider>();
+    final error = await auth.signInWithGoogle();
+
+    if (!mounted) return;
+
+    setState(() => loading = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const AppRouter()),
+      (_) => false,
+    );
+  }
+
   void goSignup() {
     Navigator.push(
       context,
@@ -81,9 +105,9 @@ class _LandingScreenState extends State<LandingScreen> {
           content: TextField(
             controller: resetEmail,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: "Email",
-              hintText: "you@college.edu",
+              hintText: "you${AuthProvider.allowedEmailDomain}",
             ),
           ),
           actions: [
@@ -234,7 +258,7 @@ class _LandingScreenState extends State<LandingScreen> {
                             ),
                             SizedBox(height: r(6)),
                             Text(
-                              "Use only college email ids",
+                              "Use only ${AuthProvider.allowedEmailDomain} email IDs",
                               style: TextStyle(
                                 fontSize: r(12.5),
                                 color: const Color(0xffff7a00),
@@ -248,7 +272,8 @@ class _LandingScreenState extends State<LandingScreen> {
                             TextField(
                               controller: emailController,
                               decoration: InputDecoration(
-                                hintText: "you@college.edu",
+                                hintText:
+                                    "you${AuthProvider.allowedEmailDomain}",
                                 prefixIcon: const Icon(Icons.email),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(r(14)),
@@ -336,6 +361,55 @@ class _LandingScreenState extends State<LandingScreen> {
                             ),
 
                             SizedBox(height: r(12)),
+
+                            SizedBox(
+                              width: double.infinity,
+                              height: r(52),
+                              child: OutlinedButton(
+                                onPressed: loading ? null : signInWithGoogle,
+                                style: OutlinedButton.styleFrom(
+                                  side: const BorderSide(
+                                    color: Color(0xffff7a00),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(r(14)),
+                                  ),
+                                ),
+                                child: loading
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.2,
+                                        ),
+                                      )
+                                    : Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: const [
+                                          CircleAvatar(
+                                            radius: 12,
+                                            backgroundColor: Color(0xffff7a00),
+                                            child: Text(
+                                              "G",
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(width: 10),
+                                          Text(
+                                            "Continue with Google",
+                                            style: TextStyle(
+                                              color: Colors.black87,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                              ),
+                            ),
 
                             /// SIGNUP LINK
                             TextButton(
