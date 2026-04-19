@@ -9,10 +9,15 @@
       "client_info": {
         "mobilesdk_app_id": "1:202225012572:android:c32ef9602f70cb97523b99",
         "android_client_info": {
-          "package_name": "com.wegovroom.app"
+          "package_name": "com.example.wegovroom"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "202225012572-p5hn6o4kqcb0o4l3ikvtbajgqip9eghq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBDOC60h1RBALyHX1Wwl_xm_nnxTPCvpaw"
@@ -20,7 +25,63 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "202225012572-p5hn6o4kqcb0o4l3ikvtbajgqip9eghq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "202225012572-i153mumupdgq1epnh6bfoaumt4kf5elk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.wegovroom"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:202225012572:android:486ed417cb45daac523b99",
+        "android_client_info": {
+          "package_name": "com.wegovroom.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "202225012572-r699q6v1aqjviep43ggm2uqhusqorvhf.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.wegovroom.app",
+            "certificate_hash": "f56ee0382a2bec6c21e31fcaec30649652b33d15"
+          }
+        },
+        {
+          "client_id": "202225012572-p5hn6o4kqcb0o4l3ikvtbajgqip9eghq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDOC60h1RBALyHX1Wwl_xm_nnxTPCvpaw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "202225012572-p5hn6o4kqcb0o4l3ikvtbajgqip9eghq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "202225012572-i153mumupdgq1epnh6bfoaumt4kf5elk.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.wegovroom"
+              }
+            }
+          ]
         }
       }
     }

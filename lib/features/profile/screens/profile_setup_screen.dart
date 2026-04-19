@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/auth_provider.dart';
@@ -68,40 +69,72 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     }
 
     setState(() => loading = true);
+    try {
+      final userRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid);
+      final existingDoc = await userRef.get();
 
-    final userRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid);
-    final existingDoc = await userRef.get();
+      final payload = <String, dynamic>{
+        'email': user.email,
+        'displayName': nameController.text.trim(),
+        'register': regController.text.trim(),
+        'phone': phoneController.text.trim(),
+        'gender': gender,
+        'avatar': avatarIndex,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
 
-    final payload = <String, dynamic>{
-      'email': user.email,
-      'displayName': nameController.text,
-      'register': regController.text,
-      'phone': phoneController.text,
-      'gender': gender,
-      'avatar': avatarIndex,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
+      if (!existingDoc.exists) {
+        payload['createdAt'] = FieldValue.serverTimestamp();
+      }
 
-    if (!existingDoc.exists) {
-      payload['createdAt'] = FieldValue.serverTimestamp();
+      await userRef.set(payload, SetOptions(merge: true));
+
+      final profileProvider = context.read<UserProfileProvider>();
+      profileProvider.listenToUserProfile(user.uid);
+      profileProvider.setCachedUserProfile(user.uid, payload);
+      unawaited(_propagateProfileChanges(user.uid));
+
+      try {
+        await PushNotificationService.instance
+            .syncCurrentUserToken()
+            .timeout(const Duration(seconds: 8));
+      } catch (e) {
+        debugPrint('Profile setup token sync skipped: $e');
+      }
+
+      auth.refresh();
+
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
+    } on FirebaseException catch (e, st) {
+      debugPrint('Complete profile Firebase error: code=${e.code}, message=${e.message}');
+      debugPrintStack(stackTrace: st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            e.message == null || e.message!.trim().isEmpty
+                ? 'Failed to complete profile (${e.code}).'
+                : 'Failed to complete profile: ${e.message}',
+          ),
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('Complete profile failed: $e');
+      debugPrintStack(stackTrace: st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to complete profile: $e'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
-
-    await userRef.set(payload, SetOptions(merge: true));
-
-    final profileProvider = context.read<UserProfileProvider>();
-    profileProvider.listenToUserProfile(user.uid);
-    profileProvider.setCachedUserProfile(user.uid, payload);
-    unawaited(_propagateProfileChanges(user.uid));
-
-    await PushNotificationService.instance.syncCurrentUserToken();
-
-    auth.refresh();
-
-    if (!mounted) return;
-
-    Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
   }
 
   Future<void> _propagateProfileChanges(String userId) async {

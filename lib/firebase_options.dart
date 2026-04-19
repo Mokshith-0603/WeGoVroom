@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBDOC60h1RBALyHX1Wwl_xm_nnxTPCvpaw',
-    appId: '1:202225012572:android:c32ef9602f70cb97523b99',
+    appId: '1:202225012572:android:486ed417cb45daac523b99',
     messagingSenderId: '202225012572',
     projectId: 'wegovroom-e77c2',
     storageBucket: 'wegovroom-e77c2.firebasestorage.app',
