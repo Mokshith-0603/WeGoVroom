@@ -66,6 +66,14 @@
           }
         },
         {
+          "client_id": "202225012572-t87ni761bkrt2t9ke71pl9mti81r8pok.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.wegovroom.app",
+            "certificate_hash": "ae09d7b4a49bf9135c67de125e8d3a8efcdb645c"
+          }
+        },
+        {
           "client_id": "202225012572-p5hn6o4kqcb0o4l3ikvtbajgqip9eghq.apps.googleusercontent.com",
           "client_type": 3
         }
