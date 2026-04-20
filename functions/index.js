@@ -1,6 +1,6 @@
 const admin = require("firebase-admin");
 const logger = require("firebase-functions/logger");
-const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {onDocumentCreated, onDocumentDeleted} = require("firebase-functions/v2/firestore");
 const {setGlobalOptions} = require("firebase-functions/v2");
 
 admin.initializeApp();
@@ -204,4 +204,48 @@ function buildDataPayload(notification, notificationId) {
   if (actorName) payload.actorName = actorName;
 
   return payload;
+}
+
+exports.syncTripJoinedOnParticipantCreate = onDocumentCreated(
+  "tripParticipants/{participantId}",
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const data = snapshot.data() || {};
+    const tripId = normalizeString(data.tripId);
+    if (!tripId) return;
+
+    await syncTripJoinedCount(tripId);
+  },
+);
+
+exports.syncTripJoinedOnParticipantDelete = onDocumentDeleted(
+  "tripParticipants/{participantId}",
+  async (event) => {
+    const snapshot = event.data;
+    if (!snapshot) return;
+
+    const data = snapshot.data() || {};
+    const tripId = normalizeString(data.tripId);
+    if (!tripId) return;
+
+    await syncTripJoinedCount(tripId);
+  },
+);
+
+async function syncTripJoinedCount(tripId) {
+  const tripRef = db.collection("trips").doc(tripId);
+  const tripSnap = await tripRef.get();
+  if (!tripSnap.exists) return;
+
+  const participantSnap = await db
+      .collection("tripParticipants")
+      .where("tripId", "==", tripId)
+      .get();
+
+  const joined = participantSnap.size;
+  const safeJoined = joined < 1 ? 1 : joined;
+
+  await tripRef.set({joined: safeJoined}, {merge: true});
 }

@@ -68,13 +68,11 @@ class ManageRequestsScreen extends StatelessWidget {
         final reqUserId = (req["userId"] ?? "").toString();
         if (reqUserId.isEmpty) throw Exception("Invalid requester");
 
-        final existingPart = await _db
+        final participantRef = _db
             .collection("tripParticipants")
-            .where("tripId", isEqualTo: tripId)
-            .where("userId", isEqualTo: reqUserId)
-            .limit(1)
-            .get();
-        if (existingPart.docs.isNotEmpty) {
+            .doc("${tripId}_$reqUserId");
+        final existingPart = await tx.get(participantRef);
+        if (existingPart.exists) {
           tx.update(reqRef, {
             "status": "approved",
             "decidedAt": FieldValue.serverTimestamp(),
@@ -82,8 +80,6 @@ class ManageRequestsScreen extends StatelessWidget {
           });
           return;
         }
-
-        final participantRef = _db.collection("tripParticipants").doc();
         tx.set(participantRef, {
           "tripId": tripId,
           "userId": reqUserId,
@@ -92,8 +88,6 @@ class ManageRequestsScreen extends StatelessWidget {
           "isHost": false,
           "createdAt": FieldValue.serverTimestamp(),
         });
-
-        tx.update(tripRef, {"joined": FieldValue.increment(1)});
         tx.update(reqRef, {
           "status": "approved",
           "decidedAt": FieldValue.serverTimestamp(),

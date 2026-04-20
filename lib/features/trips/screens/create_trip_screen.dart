@@ -212,7 +212,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       });
 
       /// ⭐ HOST PARTICIPANT SNAPSHOT
-      await db.collection("tripParticipants").add({
+      await db.collection("tripParticipants").doc("${tripRef.id}_${user.uid}").set({
         "tripId": tripRef.id,
         "userId": user.uid,
         "name": name,

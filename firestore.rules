@@ -9,8 +9,16 @@ service cloud.firestore {
       return request.auth.uid;
     }
 
+    function userPath(userId) {
+      return /databases/$(database)/documents/users/$(userId);
+    }
+
     function tripPath(tripId) {
       return /databases/$(database)/documents/trips/$(tripId);
+    }
+
+    function tripParticipantPath(tripId, userId) {
+      return /databases/$(database)/documents/tripParticipants/$(tripId + "_" + userId);
     }
 
     function tripExists(tripId) {
@@ -29,11 +37,23 @@ service cloud.firestore {
       return signedIn() && tripExists(tripId) && tripOwnerId(tripId) == uid();
     }
 
+    function isTripParticipant(tripId, userId) {
+      return tripExists(tripId) && exists(tripParticipantPath(tripId, userId));
+    }
+
+    function isTripMember(tripId) {
+      return signedIn()
+        && tripExists(tripId)
+        && (
+          tripOwnerId(tripId) == uid()
+          || isTripParticipant(tripId, uid())
+        );
+    }
+
     function canSelfJoinTrip(tripId) {
-      return tripExists(tripId)
+      return signedIn()
+        && tripExists(tripId)
         && tripData(tripId).completed != true
-        && tripData(tripId).dateTime is timestamp
-        && request.time < tripData(tripId).dateTime
         && (
           tripData(tripId).isPublic != false
           || tripOwnerId(tripId) == uid()
@@ -49,33 +69,72 @@ service cloud.firestore {
         );
     }
 
-    function isAdmin() {
-      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    function canSelfAdjustTripCount(tripId) {
+      let beforeJoined = (resource.data.joined is int || resource.data.joined is float)
+        ? resource.data.joined
+        : 1;
+      let afterJoined = (request.resource.data.joined is int || request.resource.data.joined is float)
+        ? request.resource.data.joined
+        : beforeJoined;
+      let maxPeople = (resource.data.maxPeople is int || resource.data.maxPeople is float)
+        ? resource.data.maxPeople
+        : 4;
       return signedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(["joined"])
         && (
-          request.auth.token.admin == true
-          || request.auth.token.admin == 1
-          || (request.auth.token.admin is string
-            && request.auth.token.admin.matches('(?i)^\\s*(true|1|yes)\\s*$'))
-          || request.auth.token.isAdmin == true
-          || request.auth.token.isAdmin == 1
-          || (request.auth.token.isAdmin is string
-            && request.auth.token.isAdmin.matches('(?i)^\\s*(true|1|yes)\\s*$'))
-          || (
-            request.auth.token.role is string
-            && request.auth.token.role.matches('(?i)^\\s*admin\\s*$')
+          (
+            canSelfJoinTrip(tripId)
+            && afterJoined == beforeJoined + 1
+            && afterJoined <= maxPeople
           )
-          || (userDoc.role is string && userDoc.role.matches('(?i)^\\s*admin\\s*$'))
-          || userDoc.isAdmin == true
-          || userDoc.isAdmin == 1
-          || (userDoc.isAdmin is string
-            && userDoc.isAdmin.matches('(?i)^\\s*(true|1|yes)\\s*$'))
-          || userDoc.admin == true
-          || userDoc.admin == 1
-          || (userDoc.admin is string
-            && userDoc.admin.matches('(?i)^\\s*(true|1|yes)\\s*$'))
+          || (
+            exists(tripParticipantPath(tripId, uid()))
+            && afterJoined == beforeJoined - 1
+            && afterJoined >= 1
+          )
         );
+    }
+
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.admin == true
+        || request.auth.token.admin == 1
+        || (
+          request.auth.token.admin is string
+          && request.auth.token.admin.matches('(?i)^\\s*(true|1|yes)\\s*$')
+        )
+        || request.auth.token.isAdmin == true
+        || request.auth.token.isAdmin == 1
+        || (
+          request.auth.token.isAdmin is string
+          && request.auth.token.isAdmin.matches('(?i)^\\s*(true|1|yes)\\s*$')
+        )
+        || (
+          request.auth.token.role is string
+          && request.auth.token.role.matches('(?i)^\\s*admin\\s*$')
+        )
+        || (
+          exists(userPath(uid()))
+          && (
+            (
+              get(userPath(uid())).data.role is string
+              && get(userPath(uid())).data.role.matches('(?i)^\\s*admin\\s*$')
+            )
+            || get(userPath(uid())).data.isAdmin == true
+            || get(userPath(uid())).data.isAdmin == 1
+            || (
+              get(userPath(uid())).data.isAdmin is string
+              && get(userPath(uid())).data.isAdmin.matches('(?i)^\\s*(true|1|yes)\\s*$')
+            )
+            || get(userPath(uid())).data.admin == true
+            || get(userPath(uid())).data.admin == 1
+            || (
+              get(userPath(uid())).data.admin is string
+              && get(userPath(uid())).data.admin.matches('(?i)^\\s*(true|1|yes)\\s*$')
+            )
+          )
+        )
+      );
     }
 
     function isTripNotificationType(t) {
@@ -91,16 +150,27 @@ service cloud.firestore {
 
     function canCreateTripNotification() {
       return signedIn()
+        && request.resource.data.keys().hasOnly([
+          "userId",
+          "message",
+          "type",
+          "tripId",
+          "actorId",
+          "actorName",
+          "isRead",
+          "createdAt"
+        ])
         && request.resource.data.userId is string
         && request.resource.data.message is string
+        && request.resource.data.type is string
         && request.resource.data.tripId is string
         && request.resource.data.actorId is string
         && request.resource.data.actorName is string
+        && request.resource.data.isRead == false
         && isTripNotificationType(request.resource.data.type)
         && request.resource.data.actorId == uid()
         && tripExists(request.resource.data.tripId)
         && (
-          // Participant notifies host.
           (
             (
               request.resource.data.type == "trip_request"
@@ -110,7 +180,6 @@ service cloud.firestore {
             && request.resource.data.userId == tripOwnerId(request.resource.data.tripId)
             && request.resource.data.userId != uid()
           )
-          // Host notifies participant.
           || (
             (
               request.resource.data.type == "trip_removed"
@@ -123,51 +192,97 @@ service cloud.firestore {
         );
     }
 
-    // User profiles
     match /users/{userId} {
       allow read: if signedIn();
-      allow write: if request.auth.uid == userId;
+      allow create, update, delete: if signedIn() && uid() == userId;
     }
 
-    // Trips collection
     match /trips/{tripId} {
       allow read: if signedIn();
-      allow create: if signedIn() && 
-                       request.resource.data.ownerId == request.auth.uid;
-      allow update, delete: if signedIn() && 
-                               (resource.data.ownerId == request.auth.uid || isAdmin());
+      allow create: if signedIn()
+        && request.resource.data.ownerId == uid();
+      allow update: if isTripOwner(tripId)
+        || isAdmin()
+        || canSelfAdjustTripCount(tripId);
+      allow delete: if isTripOwner(tripId) || isAdmin();
     }
 
-    // Trip participants
     match /tripParticipants/{participant} {
-      allow read, list: if signedIn();
+      allow read: if signedIn();
+
       allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "tripId",
+          "userId",
+          "name",
+          "avatar",
+          "isHost",
+          "createdAt"
+        ])
         && request.resource.data.tripId is string
         && request.resource.data.userId is string
+        && request.resource.data.name is string
+        && (
+          request.resource.data.avatar is int
+          || request.resource.data.avatar is float
+        )
+        && request.resource.data.isHost is bool
+        && participant == request.resource.data.tripId + "_" + request.resource.data.userId
+        && tripExists(request.resource.data.tripId)
         && (
           (
             request.resource.data.userId == uid()
-            && canSelfJoinTrip(request.resource.data.tripId)
+            && tripData(request.resource.data.tripId).completed != true
+            && (
+              tripData(request.resource.data.tripId).isPublic != false
+              || tripOwnerId(request.resource.data.tripId) == uid()
+              || (
+                tripData(request.resource.data.tripId).invitedUserIds is list
+                && tripData(request.resource.data.tripId).invitedUserIds.hasAny([uid()])
+              )
+              || (
+                request.auth.token.email is string
+                && tripData(request.resource.data.tripId).invitedUserEmails is list
+                && tripData(request.resource.data.tripId).invitedUserEmails.hasAny([request.auth.token.email])
+              )
+            )
           )
           || isTripOwner(request.resource.data.tripId)
         );
+
       allow update: if false;
-      allow delete: if signedIn();
+
+      allow delete: if signedIn() && (
+        resource.data.userId == uid()
+        || isTripOwner(resource.data.tripId)
+        || isAdmin()
+      );
     }
 
-    // Trip requests/join requests
     match /tripRequests/{requestId} {
-      allow read, list: if signedIn() && (
+      allow read: if signedIn() && (
         resource.data.userId == uid()
         || isTripOwner(resource.data.tripId)
         || isAdmin()
       );
 
       allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          "tripId",
+          "hostId",
+          "ownerId",
+          "userId",
+          "name",
+          "avatar",
+          "email",
+          "status",
+          "createdAt"
+        ])
         && request.resource.data.tripId is string
         && tripExists(request.resource.data.tripId)
         && request.resource.data.userId == uid()
         && uid() != tripOwnerId(request.resource.data.tripId)
+        && request.resource.data.status == "pending"
         && (
           !request.resource.data.keys().hasAny(["hostId"])
           || (
@@ -175,65 +290,118 @@ service cloud.firestore {
             && request.resource.data.hostId == tripOwnerId(request.resource.data.tripId)
           )
         )
-        && request.resource.data.status == "pending";
+        && (
+          !request.resource.data.keys().hasAny(["ownerId"])
+          || (
+            request.resource.data.ownerId is string
+            && request.resource.data.ownerId == tripOwnerId(request.resource.data.tripId)
+          )
+        )
+        && (
+          !request.resource.data.keys().hasAny(["name"])
+          || request.resource.data.name is string
+        )
+        && (
+          !request.resource.data.keys().hasAny(["email"])
+          || request.resource.data.email is string
+        );
 
       allow update: if signedIn()
         && isTripOwner(resource.data.tripId)
         && resource.data.status == "pending"
-        && request.resource.data.tripId == resource.data.tripId
-        && request.resource.data.userId == resource.data.userId
-        && (
-          !resource.data.keys().hasAny(["hostId"])
-          || request.resource.data.hostId == resource.data.hostId
-        )
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          "status",
+          "decidedAt",
+          "decidedBy"
+        ])
+        && request.resource.data.status != "pending"
         && (
           request.resource.data.status == "approved"
           || request.resource.data.status == "rejected"
-        );
+        )
+        && request.resource.data.decidedBy == uid();
 
       allow delete: if false;
     }
 
-    // Trip chat messages
     match /tripMessages/{message} {
-      allow read, list: if signedIn();
-      allow create: if signedIn() && 
-                       request.resource.data.senderId == request.auth.uid;
-      allow delete: if request.auth.uid == resource.data.senderId;
-    }
-
-    // Trip reviews: visible to signed-in users
-    match /tripReviews/{reviewId} {
-      allow read, list: if signedIn();
+      allow read: if signedIn() && (
+        isTripMember(resource.data.tripId)
+        || isAdmin()
+      );
 
       allow create: if signedIn()
-        && request.resource.data.reviewerId == uid();
+        && request.resource.data.tripId is string
+        && tripExists(request.resource.data.tripId)
+        && request.resource.data.senderId == uid()
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && (
+          isTripMember(request.resource.data.tripId)
+          || isAdmin()
+        );
+
+      allow update: if false;
+
+      allow delete: if signedIn() && (
+        resource.data.senderId == uid()
+        || isAdmin()
+      );
+    }
+
+    match /tripReviews/{reviewId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.tripId is string
+        && tripExists(request.resource.data.tripId)
+        && request.resource.data.reviewerId == uid()
+        && request.resource.data.revieweeId is string
+        && request.resource.data.revieweeId != uid()
+        && reviewId == (
+          request.resource.data.tripId
+          + "_" + uid()
+          + "_" + request.resource.data.revieweeId
+        )
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment is string
+        && isTripMember(request.resource.data.tripId);
 
       allow update: if signedIn()
         && resource.data.reviewerId == uid()
-        && request.resource.data.reviewerId == uid();
+        && request.resource.data.reviewerId == uid()
+        && request.resource.data.tripId == resource.data.tripId
+        && request.resource.data.revieweeId == resource.data.revieweeId
+        && reviewId == (
+          resource.data.tripId
+          + "_" + uid()
+          + "_" + resource.data.revieweeId
+        )
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.comment is string;
 
       allow delete: if signedIn()
         && (resource.data.reviewerId == uid() || isAdmin());
     }
 
-    // User feedbacks: any signed-in user can submit, only admins can read all
     match /feedbacks/{feedbackId} {
       allow create: if signedIn()
         && request.resource.data.userId == uid();
 
-      allow read, list: if isAdmin();
+      allow read: if isAdmin();
 
       allow update, delete: if false;
     }
 
-    // Drivers: visible to all signed-in users, add/update/delete by admins only
     match /drivers/{driverId} {
       allow read: if signedIn();
       allow create, update, delete: if isAdmin();
     }
 
-    // Host removal logs from trip participants
     match /tripKickLogs/{logId} {
       allow create: if signedIn()
         && request.resource.data.tripId is string
@@ -242,17 +410,36 @@ service cloud.firestore {
         && request.resource.data.reason.size() > 0
         && tripExists(request.resource.data.tripId)
         && uid() == tripOwnerId(request.resource.data.tripId);
+
       allow read: if signedIn() && (
         isAdmin()
         || uid() == resource.data.userId
         || uid() == tripOwnerId(resource.data.tripId)
       );
+
       allow update, delete: if false;
     }
 
-    // Driver reviews: any signed-in user can review, users can edit only their own review
+    match /tripLeaveLogs/{logId} {
+      allow create: if signedIn()
+        && request.resource.data.tripId is string
+        && request.resource.data.userId == uid()
+        && request.resource.data.reason is string
+        && request.resource.data.reason.size() > 0
+        && tripExists(request.resource.data.tripId)
+        && isTripParticipant(request.resource.data.tripId, uid());
+
+      allow read: if signedIn() && (
+        isAdmin()
+        || uid() == resource.data.userId
+        || uid() == tripOwnerId(resource.data.tripId)
+      );
+
+      allow update, delete: if false;
+    }
+
     match /driverReviews/{reviewId} {
-      allow read, list: if signedIn();
+      allow read: if signedIn();
 
       allow create: if signedIn()
         && request.resource.data.userId == uid()
@@ -277,15 +464,19 @@ service cloud.firestore {
         && (resource.data.userId == uid() || isAdmin());
     }
 
-    // Notifications
     match /notifications/{docId} {
-      // Admin can send notifications
-      allow create: if isAdmin() || canCreateTripNotification();
+      allow create: if (
+        isAdmin()
+        && request.resource.data.userId is string
+        && request.resource.data.message is string
+        && request.resource.data.type is string
+      ) || canCreateTripNotification();
 
-      // Users can read only their own notifications
-      allow read: if signedIn() && resource.data.userId == uid();
+      allow read: if signedIn() && (
+        resource.data.userId == uid()
+        || isAdmin()
+      );
 
-      // Users can mark only their own notifications as read.
       allow update: if isAdmin() || (
         signedIn()
         && resource.data.userId == uid()

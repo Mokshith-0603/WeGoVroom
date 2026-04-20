@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "202225012572-ea66ktl7iah5iccu106521glttl5rcdr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.wegovroom",
+            "certificate_hash": "f56ee0382a2bec6c21e31fcaec30649652b33d15"
+          }
+        },
+        {
           "client_id": "202225012572-p5hn6o4kqcb0o4l3ikvtbajgqip9eghq.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -50,11 +58,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "202225012572-r699q6v1aqjviep43ggm2uqhusqorvhf.apps.googleusercontent.com",
+          "client_id": "202225012572-eg098htt8ij0k6d4mb9ptl8o8924kem7.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.wegovroom.app",
-            "certificate_hash": "f56ee0382a2bec6c21e31fcaec30649652b33d15"
+            "certificate_hash": "4fb179cd5b3134c14d3ce8d2b0608d390bfffeb3"
           }
         },
         {
