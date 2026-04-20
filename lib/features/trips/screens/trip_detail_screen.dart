@@ -165,7 +165,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         .get();
 
     if (snap.docs.isNotEmpty) {
-      setState(() => joinedAlready = true);
+      setState(() {
+        joinedAlready = true;
+        hasPendingRequest = false;
+        pendingRequestId = null;
+      });
     }
 
     final pendingSnap = await db
@@ -339,7 +343,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
       await db.runTransaction((tx) async {
         final ref = db.collection("trips").doc(widget.tripId);
+        final participantRef = db
+            .collection("tripParticipants")
+            .doc("${widget.tripId}_${user.uid}");
         final snap = await tx.get(ref);
+        final participantSnap = await tx.get(participantRef);
 
         final data = snap.data()!;
         DateTime? startTime;
@@ -352,20 +360,21 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         if (data["completed"] == true) {
           throw Exception("Trip already completed");
         }
+        if (participantSnap.exists) {
+          return;
+        }
         final joined = data["joined"] ?? 1;
         final max = data["maxPeople"] ?? 4;
 
         if (joined >= max) throw Exception("Trip full");
-        tx.update(ref, {"joined": joined + 1});
-      });
-
-      await db.collection("tripParticipants").add({
-        "tripId": widget.tripId,
-        "userId": user.uid,
-        "name": name,
-        "avatar": avatar,
-        "isHost": false,
-        "createdAt": FieldValue.serverTimestamp(),
+        tx.set(participantRef, {
+          "tripId": widget.tripId,
+          "userId": user.uid,
+          "name": name,
+          "avatar": avatar,
+          "isHost": false,
+          "createdAt": FieldValue.serverTimestamp(),
+        });
       });
 
       try {
@@ -381,9 +390,18 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         });
       } catch (_) {}
 
-      setState(() => joinedAlready = true);
+      setState(() {
+        joinedAlready = true;
+        hasPendingRequest = false;
+        pendingRequestId = null;
+      });
     } catch (e) {
       debugPrint(e.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Failed to join trip: $e")));
+      }
     }
 
     setState(() => loading = false);
@@ -467,17 +485,6 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       final participantData = participantDoc.data();
       final userName = (participantData["name"] ?? "User").toString();
 
-      await db.runTransaction((tx) async {
-        final tripRef = db.collection("trips").doc(widget.tripId);
-        final tripSnap = await tx.get(tripRef);
-        final tripData = tripSnap.data() ?? const <String, dynamic>{};
-        final joined = (tripData["joined"] as num?)?.toInt() ?? 1;
-        final nextJoined = (joined - 1) < 1 ? 1 : (joined - 1);
-
-        tx.delete(participantDoc.reference);
-        tx.update(tripRef, {"joined": nextJoined});
-      });
-
       try {
         await db.collection("tripLeaveLogs").add({
           "tripId": widget.tripId,
@@ -499,6 +506,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           "createdAt": FieldValue.serverTimestamp(),
         });
       } catch (_) {}
+
+      await participantDoc.reference.delete();
 
       try {
         await db.collection("notifications").add({
@@ -602,16 +611,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   }) async {
     setState(() => loading = true);
     try {
-      await db.runTransaction((tx) async {
-        final tripRef = db.collection("trips").doc(widget.tripId);
-        final tripSnap = await tx.get(tripRef);
-        final tripData = tripSnap.data() ?? const <String, dynamic>{};
-        final joined = (tripData["joined"] as num?)?.toInt() ?? 1;
-        final nextJoined = (joined - 1) < 1 ? 1 : (joined - 1);
-
-        tx.delete(participantRef);
-        tx.update(tripRef, {"joined": nextJoined});
-      });
+      await participantRef.delete();
 
       try {
         await db.collection("tripKickLogs").add({

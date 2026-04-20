@@ -32,12 +32,6 @@ class TripService {
       "joinedAt": DateTime.now(),
     });
 
-    final tripRef = _db.collection("trips").doc(tripId);
-
-    batch.update(tripRef, {
-      "joined": FieldValue.increment(1),
-    });
-
     await batch.commit();
   }
 }

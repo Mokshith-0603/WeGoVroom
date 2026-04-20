@@ -10,10 +10,13 @@ class AuthProvider extends ChangeNotifier {
   static const String _googleServerClientId =
       "202225012572-p5hn6o4kqcb0o4l3ikvtbajgqip9eghq.apps.googleusercontent.com";
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    clientId: kIsWeb ? _googleWebClientId : null,
-    serverClientId: _googleServerClientId,
-  );
+  final GoogleSignIn _googleSignIn = kIsWeb
+      ? GoogleSignIn(
+          clientId: _googleWebClientId,
+        )
+      : GoogleSignIn(
+          serverClientId: _googleServerClientId,
+        );
   static const String adminEmail = "admin@vitapstudent.ac.in";
   static const String allowedEmailDomain = "@vitapstudent.ac.in";
 
