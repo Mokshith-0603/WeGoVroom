@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../utils/responsive.dart';
+import '../../../theme/app_theme.dart';
 import '../../../providers/user_profile_provider.dart';
 import '../../profile/widgets/avatar_utils.dart';
 
@@ -195,82 +196,537 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _noTrip() {
     final theme = Theme.of(context);
     final r = context.rs;
-    final secondary = theme.colorScheme.secondary;
+    final isDark = theme.brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              color: Colors.black,
-              padding: EdgeInsets.fromLTRB(r(14), r(10), r(14), r(12)),
-              child: Row(
-                children: [
-                  Container(
-                    width: r(34),
-                    height: r(34),
-                    decoration: BoxDecoration(
-                      color: secondary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.chat,
-                      color: Colors.black,
-                      size: 20,
-                    ),
+      body: _chatBackground(
+        child: SafeArea(
+          child: ListView(
+            physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.fromLTRB(r(20), r(16), r(20), r(110)),
+            children: [
+              _chatHeader(context, subtitle: 'Chat with your trip members'),
+              SizedBox(height: r(34)),
+              _emptyHero(context),
+              SizedBox(height: r(24)),
+              Text(
+                'No Active Trip Chat',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontSize: r(22),
+                ),
+              ),
+              SizedBox(height: r(8)),
+              Text(
+                "You don't have any active trip chats right now.",
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+                  fontSize: r(13.5),
+                ),
+              ),
+              SizedBox(height: r(34)),
+              _benefitsCard(context),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _chatBackground({required Widget child}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? const [Color(0xFF06131E), Color(0xFF08111A)]
+              : const [Color(0xFFFFFEFC), Color(0xFFF8F5F0)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _chatHeader(
+    BuildContext context, {
+    required String subtitle,
+    bool showBack = false,
+    int? onlineCount,
+  }) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    return Row(
+      children: [
+        if (showBack) ...[
+          IconButton(
+            onPressed: () => Navigator.maybePop(context),
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          SizedBox(width: r(2)),
+        ],
+        Container(
+          width: r(48),
+          height: r(48),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [AppTheme.brandOrange, AppTheme.brandOrangeLight],
+            ),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.chat_rounded, color: Colors.white),
+        ),
+        SizedBox(width: r(12)),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Trip Chat',
+                style: theme.textTheme.titleLarge?.copyWith(fontSize: r(21)),
+              ),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.58),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (onlineCount != null) ...[
+          Container(
+            width: r(9),
+            height: r(9),
+            decoration: const BoxDecoration(
+              color: Color(0xFF22C55E),
+              shape: BoxShape.circle,
+            ),
+          ),
+          SizedBox(width: r(8)),
+          Text(
+            '$onlineCount online',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.72),
+            ),
+          ),
+          SizedBox(width: r(8)),
+        ],
+        IconButton(
+          onPressed: () {},
+          icon: const Icon(Icons.more_vert_rounded),
+        ),
+      ],
+    );
+  }
+
+  Widget _emptyHero(BuildContext context) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    final isDark = theme.brightness == Brightness.dark;
+    return SizedBox(
+      height: r(190),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned.fill(
+            child: Icon(
+              Icons.send_rounded,
+              color: AppTheme.brandOrange.withValues(alpha: isDark ? 0.22 : 0.16),
+              size: r(96),
+            ),
+          ),
+          Container(
+            width: r(132),
+            height: r(132),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppTheme.brandOrange.withValues(alpha: isDark ? 0.10 : 0.07),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.brandOrange.withValues(alpha: 0.12),
+                  blurRadius: r(36),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Container(
+                width: r(76),
+                height: r(64),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [
+                      AppTheme.brandOrange,
+                      AppTheme.brandOrangeLight,
+                    ],
                   ),
-                  SizedBox(width: r(10)),
-                  Text(
-                    'Trip Chat',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: r(16),
-                    ),
-                  ),
-                ],
+                  borderRadius: BorderRadius.circular(r(20)),
+                ),
+                child: Icon(
+                  Icons.more_horiz_rounded,
+                  color: Colors.white,
+                  size: r(42),
+                ),
               ),
             ),
-            Expanded(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _benefitsCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    return Container(
+      padding: EdgeInsets.all(r(18)),
+      decoration: _surfaceDecoration(context, r(22)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Why chat in trips?', style: theme.textTheme.titleMedium),
+          SizedBox(height: r(18)),
+          _benefitRow(
+            context,
+            Icons.groups_rounded,
+            AppTheme.brandOrange,
+            'Connect with trip members',
+            'Get to know your fellow travelers',
+          ),
+          _benefitRow(
+            context,
+            Icons.mark_chat_read_rounded,
+            Colors.green,
+            'Share updates & plans',
+            'Stay informed and in sync',
+          ),
+          _benefitRow(
+            context,
+            Icons.security_rounded,
+            Colors.blue,
+            'Safe & secure conversations',
+            'We keep your chats private',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _benefitRow(
+    BuildContext context,
+    IconData icon,
+    Color color,
+    String title,
+    String subtitle,
+  ) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    return Padding(
+      padding: EdgeInsets.only(bottom: r(14)),
+      child: Row(
+        children: [
+          Container(
+            width: r(46),
+            height: r(46),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(r(14)),
+            ),
+            child: Icon(icon, color: color, size: r(22)),
+          ),
+          SizedBox(width: r(14)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.titleSmall),
+                SizedBox(height: r(2)),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.56),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _suggestedTrip(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String time,
+    required String seats,
+    required Color color,
+  }) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    return Container(
+      margin: EdgeInsets.only(bottom: r(12)),
+      padding: EdgeInsets.all(r(14)),
+      decoration: _surfaceDecoration(context, r(18)),
+      child: Row(
+        children: [
+          Container(
+            width: r(48),
+            height: r(48),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(r(14)),
+            ),
+            child: Icon(icon, color: color, size: r(24)),
+          ),
+          SizedBox(width: r(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.titleSmall),
+                SizedBox(height: r(5)),
+                Row(
                   children: [
+                    Icon(
+                      Icons.calendar_today_rounded,
+                      size: r(13),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.58),
+                    ),
+                    SizedBox(width: r(5)),
+                    Text(time, style: theme.textTheme.bodySmall),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: r(10), vertical: r(6)),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(r(16)),
+            ),
+            child: Text(
+              seats,
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w800,
+                fontSize: r(10.5),
+              ),
+            ),
+          ),
+          SizedBox(width: r(6)),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.42),
+          ),
+        ],
+      ),
+    );
+  }
+
+  BoxDecoration _surfaceDecoration(BuildContext context, double radius) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return BoxDecoration(
+      color: isDark ? const Color(0xFF101B25) : Colors.white,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.055),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    );
+  }
+
+  Widget _activeTripCard(
+    BuildContext context,
+    Map<String, dynamic> tripData,
+    int participantCount,
+  ) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    final from = (tripData['from'] ?? '').toString();
+    final to = (tripData['to'] ?? '').toString();
+    final meeting = (tripData['meetingPoint'] ?? from).toString();
+    final maxPeople = (tripData['maxPeople'] as num?)?.toInt() ?? 4;
+    final joined = (tripData['joined'] as num?)?.toInt() ?? participantCount;
+    final seatsLeft = (maxPeople - joined).clamp(0, maxPeople);
+    final dt = _tripDateTime(tripData);
+    final dateText = dt == null
+        ? ''
+        : '${dt.day} ${DateFormat('MMM').format(dt)}, ${TimeOfDay.fromDateTime(dt).format(context)}';
+
+    return Container(
+      padding: EdgeInsets.all(r(14)),
+      decoration: _surfaceDecoration(context, r(20)),
+      child: Row(
+        children: [
+          Container(
+            width: r(54),
+            height: r(54),
+            decoration: BoxDecoration(
+              color: AppTheme.brandOrange.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(r(16)),
+            ),
+            child: Icon(
+              Icons.directions_bus_rounded,
+              color: AppTheme.brandOrange,
+              size: r(30),
+            ),
+          ),
+          SizedBox(width: r(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$from → $to',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          fontSize: r(14.5),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: r(8)),
+                    Text(
+                      'View Trip',
+                      style: TextStyle(
+                        color: AppTheme.brandOrange,
+                        fontWeight: FontWeight.w800,
+                        fontSize: r(11.5),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppTheme.brandOrange,
+                      size: r(18),
+                    ),
+                  ],
+                ),
+                SizedBox(height: r(4)),
+                Text(
+                  meeting.isEmpty ? 'Pickup point' : meeting,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.56),
+                  ),
+                ),
+                SizedBox(height: r(10)),
+                Row(
+                  children: [
+                    if (dateText.isNotEmpty)
+                      Expanded(
+                        child: _compactMeta(
+                          context,
+                          Icons.calendar_today_rounded,
+                          dateText,
+                        ),
+                      ),
                     Container(
-                      height: r(82),
-                      width: r(82),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: r(9),
+                        vertical: r(5),
+                      ),
                       decoration: BoxDecoration(
-                        color: const Color(0xfffff2e8),
-                        borderRadius: BorderRadius.circular(r(22)),
+                        color: Colors.green.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(r(16)),
                       ),
-                      child: const Icon(
-                        Icons.chat_bubble_outline,
-                        color: Color(0xffff7a00),
-                        size: 38,
-                      ),
-                    ),
-                    SizedBox(height: r(14)),
-                    Text(
-                      'No Active Trip Chat',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontSize: r(19),
-                      ),
-                    ),
-                    SizedBox(height: r(6)),
-                    Text(
-                      'Join a trip to start chatting',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey[600],
-                        fontSize: r(14),
+                      child: _compactMeta(
+                        context,
+                        Icons.group_outlined,
+                        '$seatsLeft seats left',
+                        color: Colors.green,
                       ),
                     ),
                   ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _routePoint(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+  }) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.location_on_rounded,
+              color: AppTheme.brandOrange,
+              size: r(15),
+            ),
+            SizedBox(width: r(3)),
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ),
           ],
         ),
-      ),
+        SizedBox(height: r(2)),
+        Text(
+          subtitle,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _compactMeta(
+    BuildContext context,
+    IconData icon,
+    String text, {
+    Color? color,
+  }) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    final tint = color ?? theme.colorScheme.onSurface.withValues(alpha: 0.70);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: tint, size: r(15)),
+        SizedBox(width: r(5)),
+        Text(
+          text,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: tint,
+            fontWeight: color == null ? null : FontWeight.w800,
+          ),
+        ),
+      ],
     );
   }
 
@@ -320,6 +776,8 @@ class _ChatScreenState extends State<ChatScreen> {
     required Color secondary,
   }) {
     final r = context.rs;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final senderId = data['senderId']?.toString() ?? '';
     final profileProvider = context.watch<UserProfileProvider>();
     final profile = profileProvider.getUserProfile(senderId);
@@ -347,7 +805,9 @@ class _ChatScreenState extends State<ChatScreen> {
             MediaQuery.of(context).size.width * (context.isTablet ? 0.5 : 0.68),
       ),
       decoration: BoxDecoration(
-        color: mine ? secondary : Colors.black,
+        color: mine
+            ? secondary.withValues(alpha: isDark ? 0.24 : 0.14)
+            : (isDark ? const Color(0xFF171D23) : const Color(0xFFF2F2F3)),
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(r(14)),
           topRight: Radius.circular(r(14)),
@@ -363,14 +823,16 @@ class _ChatScreenState extends State<ChatScreen> {
             style: TextStyle(
               fontSize: r(11),
               fontWeight: FontWeight.w700,
-              color: mine ? Colors.black87 : Colors.white70,
+              color: mine
+                  ? AppTheme.brandOrange
+                  : theme.colorScheme.onSurface.withValues(alpha: 0.62),
             ),
           ),
           SizedBox(height: r(3)),
           Text(
             (data['text'] ?? '').toString(),
             style: TextStyle(
-              color: mine ? Colors.black : Colors.white,
+              color: theme.colorScheme.onSurface,
               fontSize: r(14.5),
             ),
           ),
@@ -381,7 +843,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 time,
                 style: TextStyle(
                   fontSize: r(11),
-                  color: mine ? Colors.black54 : Colors.white60,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.52),
                 ),
               ),
             ),
@@ -425,7 +887,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (uid == null) return _noTrip();
     context.read<UserProfileProvider>().listenToUserProfile(uid!);
 
-    final secondary = Theme.of(context).colorScheme.secondary;
+    final theme = Theme.of(context);
+    final secondary = AppTheme.brandOrange;
     final r = context.rs;
 
     if (_effectiveTripId == null) {
@@ -541,65 +1004,24 @@ class _ChatScreenState extends State<ChatScreen> {
             final canSend = _canChat;
 
             return Scaffold(
-              backgroundColor: Colors.white,
-              body: SafeArea(
-                child: Column(
-                  children: [
-                    Container(
-                      color: Colors.black,
-                      padding: EdgeInsets.fromLTRB(r(14), r(10), r(14), r(12)),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: r(34),
-                            height: r(34),
-                            decoration: BoxDecoration(
-                              color: secondary,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(
-                              Icons.chat,
-                              color: Colors.black,
-                              size: 20,
-                            ),
-                          ),
-                          SizedBox(width: r(10)),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Trip Chat',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: r(16),
-                                  ),
-                                ),
-                                Text(
-                                  tripTitle,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: r(12),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            width: r(8),
-                            height: r(8),
-                            decoration: const BoxDecoration(
-                              color: Color(0xff35d16f),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ],
+              body: _chatBackground(
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(r(12), r(10), r(12), r(8)),
+                        child: _chatHeader(
+                          context,
+                          subtitle: tripTitle,
+                          showBack: Navigator.canPop(context),
+                          onlineCount: docs.length + (isOwner ? 1 : 0),
+                        ),
                       ),
-                    ),
-                    Expanded(
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(r(16), r(4), r(16), r(10)),
+                        child: _activeTripCard(context, tripData, docs.length),
+                      ),
+                      Expanded(
                       child: Stack(
                         children: [
                           Positioned(
@@ -714,7 +1136,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               return ListView.builder(
                                 controller: _scrollController,
                                 padding: EdgeInsets.symmetric(
-                                  horizontal: r(12),
+                                  horizontal: r(16),
                                   vertical: r(12),
                                 ),
                                 itemCount: messageDocs.length,
@@ -736,31 +1158,47 @@ class _ChatScreenState extends State<ChatScreen> {
                         ],
                       ),
                     ),
-                    Container(
-                      color: Colors.white,
-                      padding: EdgeInsets.fromLTRB(r(12), r(8), r(12), r(12)),
-                      child: Row(
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(r(14), r(8), r(14), r(14)),
+                        child: Row(
                         children: [
                           Expanded(
                             child: Container(
                               decoration: BoxDecoration(
-                                color: secondary.withOpacity(0.22),
+                                color: theme.brightness == Brightness.dark
+                                    ? const Color(0xFF101820)
+                                    : Colors.white,
                                 borderRadius: BorderRadius.circular(r(30)),
                                 border: Border.all(
-                                  color: secondary.withOpacity(0.35),
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.08),
                                 ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(
+                                      alpha: theme.brightness == Brightness.dark
+                                          ? 0.16
+                                          : 0.07,
+                                    ),
+                                    blurRadius: r(16),
+                                    offset: Offset(0, r(7)),
+                                  ),
+                                ],
                               ),
                               child: TextField(
                                 controller: controller,
                                 enabled: canSend,
                                 maxLines: null,
-                                style: const TextStyle(color: Colors.black87),
+                                style: TextStyle(
+                                  color: theme.colorScheme.onSurface,
+                                ),
                                 textInputAction: TextInputAction.send,
                                 onSubmitted: (_) => send(),
                                 decoration: InputDecoration(
                                   hintText: 'Send a message',
                                   hintStyle: TextStyle(
-                                    color: Colors.black54,
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.52),
                                     fontSize: r(14),
                                   ),
                                   border: InputBorder.none,
@@ -775,7 +1213,12 @@ class _ChatScreenState extends State<ChatScreen> {
                           SizedBox(width: r(8)),
                           Container(
                             decoration: BoxDecoration(
-                              color: secondary,
+                              gradient: const LinearGradient(
+                                colors: [
+                                  AppTheme.brandOrange,
+                                  AppTheme.brandOrangeLight,
+                                ],
+                              ),
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
@@ -789,14 +1232,15 @@ class _ChatScreenState extends State<ChatScreen> {
                               onPressed: canSend ? send : null,
                               icon: const Icon(
                                 Icons.send_rounded,
-                                color: Colors.black,
+                                color: Colors.white,
                               ),
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

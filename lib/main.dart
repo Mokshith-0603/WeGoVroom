@@ -6,8 +6,10 @@ import 'firebase_options.dart';
 import 'features/splash/screens/startup_splash_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/user_profile_provider.dart';
+import 'providers/theme_mode_provider.dart';
 import 'navigation/app_router.dart';
 import 'services/push_notification_service.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +23,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => UserProfileProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeModeProvider()),
       ],
       child: const WeGoVroomApp(),
     ),
@@ -32,36 +35,14 @@ class WeGoVroomApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = context.watch<ThemeModeProvider>().themeMode;
+
     return MaterialApp(
       title: 'WeGoVroom',
       debugShowCheckedModeBanner: false,
-
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: Colors.white,
-
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.indigo,
-          primary: Colors.indigo,
-          secondary: const Color(0xffff7a00), // orange accent
-        ),
-
-        textTheme: const TextTheme(
-          headlineMedium: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.black,
-          ),
-          bodyMedium: TextStyle(color: Colors.black87),
-        ),
-
-        appBarTheme: const AppBarTheme(
-          centerTitle: false,
-          elevation: 0,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-        ),
-      ),
-
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
+      themeMode: themeMode,
       home: const StartupSplashScreen(child: AppRouter()),
     );
   }

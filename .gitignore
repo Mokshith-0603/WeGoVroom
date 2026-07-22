@@ -45,3 +45,4 @@ app.*.map.json
 /android/app/release
 
 .tmp/
+.gradle-user-home/

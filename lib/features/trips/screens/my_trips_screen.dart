@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../providers/user_profile_provider.dart';
+import '../../../theme/app_theme.dart';
 import '../../../utils/responsive.dart';
 import '../../../utils/transport_icons.dart';
 import 'manage_requests_screen.dart';
@@ -16,64 +17,99 @@ class MyTripsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser!.uid;
-
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final secondary = scheme.secondary;
-    final bg = theme.scaffoldBackgroundColor;
+    final r = context.rs;
+    final isDark = theme.brightness == Brightness.dark;
 
     return DefaultTabController(
       length: 5,
       child: Scaffold(
-        backgroundColor: bg,
-        appBar: AppBar(
-          backgroundColor: bg,
-          elevation: 0,
-          title: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                "My Trips",
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.black,
+        body: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isDark
+                  ? const [Color(0xFF06131E), Color(0xFF08111A)]
+                  : const [Color(0xFFFFFEFC), Color(0xFFF8F5F0)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: EdgeInsets.fromLTRB(r(22), r(18), r(22), r(14)),
+                  child: Text(
+                    "My Trips",
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontSize: r(32),
+                      letterSpacing: -1.1,
+                    ),
+                  ),
                 ),
-              ),
-              SizedBox(width: context.rs(8)),
-              Icon(
-                Icons.map_outlined,
-                color: Colors.black,
-                size: context.rs(22),
-              ),
-            ],
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: r(16)),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: r(10),
+                      vertical: r(8),
+                    ),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF111B25) : Colors.white,
+                      borderRadius: BorderRadius.circular(r(20)),
+                      border: Border.all(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.08,
+                        ),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(
+                            alpha: isDark ? 0.16 : 0.06,
+                          ),
+                          blurRadius: r(16),
+                          offset: Offset(0, r(7)),
+                        ),
+                      ],
+                    ),
+                    child: const TabBar(
+                      dividerColor: Colors.transparent,
+                      indicatorColor: AppTheme.brandOrange,
+                      labelColor: AppTheme.brandOrange,
+                      unselectedLabelColor: Colors.grey,
+                      tabs: [
+                        Tab(icon: Icon(Icons.home_outlined), text: "Hosting"),
+                        Tab(icon: Icon(Icons.groups_outlined), text: "Joined"),
+                        Tab(
+                          icon: Icon(Icons.calendar_month_outlined),
+                          text: "Pending",
+                        ),
+                        Tab(icon: Icon(Icons.history_rounded), text: "History"),
+                        Tab(icon: Icon(Icons.people_alt_outlined), text: "People"),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(height: r(12)),
+                Expanded(
+                  child: TabBarView(
+                    children: [
+                      _hosting(uid, context),
+                      _joined(uid, context),
+                      _pending(uid, context),
+                      _history(uid, context),
+                      _people(uid, context),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          iconTheme: const IconThemeData(color: Colors.black),
-          bottom: TabBar(
-            isScrollable: context.isTablet,
-            labelColor: secondary,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: secondary,
-            tabs: const [
-              Tab(text: "Hosting"),
-              Tab(text: "Joined"),
-              Tab(text: "Pending"),
-              Tab(text: "History"),
-              Tab(text: "People"),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _hosting(uid, context),
-            _joined(uid, context),
-            _pending(uid, context),
-            _history(uid, context),
-            _people(uid, context),
-          ],
         ),
       ),
     );
   }
-
   DateTime? _tripDateTime(Map<String, dynamic> data) {
     final raw = data["dateTime"];
     if (raw is Timestamp) return raw.toDate();
@@ -107,8 +143,8 @@ class MyTripsScreen extends StatelessWidget {
     bool showHostActions = false,
   }) {
     final theme = Theme.of(context);
-    final secondary = theme.colorScheme.secondary;
     final r = context.rs;
+    final isDark = theme.brightness == Brightness.dark;
     final tripIcon = destinationTransportIcon(data["to"]?.toString());
     final tripDateTime = _tripDateTime(data);
     final ownerId = (data["ownerId"] ?? "").toString();
@@ -124,9 +160,11 @@ class MyTripsScreen extends StatelessWidget {
                 data["ownerName"] ??
                 "")
             .toString();
+    final status = _status(data);
+    final tint = _destinationColor(data["to"]?.toString(), status.$1);
 
     return InkWell(
-      borderRadius: BorderRadius.circular(r(18)),
+      borderRadius: BorderRadius.circular(r(22)),
       onTap:
           onTap ??
           () {
@@ -138,84 +176,237 @@ class MyTripsScreen extends StatelessWidget {
             );
           },
       child: Container(
-        margin: EdgeInsets.symmetric(horizontal: r(16), vertical: r(8)),
-        padding: EdgeInsets.all(r(16)),
+        height: showHostActions ? null : r(150),
+        margin: EdgeInsets.fromLTRB(r(16), r(8), r(16), r(12)),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(r(18)),
-          boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black12)],
+          color: isDark ? const Color(0xFF101B25) : Colors.white,
+          borderRadius: BorderRadius.circular(r(22)),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.09)
+                : const Color(0xFFEAE5DE),
+          ),
+          boxShadow: [
+            BoxShadow(
+              blurRadius: r(18),
+              color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06),
+              offset: Offset(0, r(8)),
+            ),
+          ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Row(
-              children: [
-                Icon(tripIcon, color: secondary),
-                SizedBox(width: r(8)),
-                Expanded(
-                  child: Text(
-                    "${data["from"]} -> ${data["to"]}",
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Container(
+                  height: r(58),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        tint.withValues(alpha: isDark ? 0.22 : 0.10),
+                        tint.withValues(alpha: isDark ? 0.06 : 0.03),
+                      ],
                     ),
                   ),
                 ),
-              ],
-            ),
-            SizedBox(height: r(4)),
-            Text(
-              "Host: $ownerName",
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[700],
               ),
             ),
-            if (tripDateTime != null) ...[
-              SizedBox(height: r(2)),
-              Text(
-                "Date & Time: ${_formatTripDateTime(tripDateTime)}",
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[700],
-                ),
-              ),
-            ],
-            if (showHostActions) ...[
-              SizedBox(height: r(10)),
-              Row(
+            Padding(
+              padding: EdgeInsets.all(r(16)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ManageRequestsScreen(tripId: tripId),
+                  Row(
+                    children: [
+                      Container(
+                        width: r(54),
+                        height: r(54),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [tint, tint.withValues(alpha: 0.78)],
+                          ),
+                          borderRadius: BorderRadius.circular(r(14)),
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.person_search),
-                    label: const Text("Manage Requests"),
+                        child: Icon(tripIcon, color: Colors.white, size: r(28)),
+                      ),
+                      SizedBox(width: r(14)),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "${data["from"]} → ${data["to"]}",
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontSize: r(16),
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            SizedBox(height: r(8)),
+                            _metaLine(
+                              context,
+                              Icons.person_outline_rounded,
+                              "Host: $ownerName",
+                            ),
+                            if (tripDateTime != null)
+                              _metaLine(
+                                context,
+                                Icons.calendar_today_rounded,
+                                "Date & Time: ${_formatTripDateTime(tripDateTime)}",
+                              ),
+                          ],
+                        ),
+                      ),
+                      _statusPill(context, status.$2, status.$1),
+                    ],
                   ),
-                  SizedBox(width: r(10)),
-                  StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance
-                        .collection("tripRequests")
-                        .where("tripId", isEqualTo: tripId)
-                        .where("status", isEqualTo: "pending")
-                        .snapshots(),
-                    builder: (_, reqSnap) {
-                      final count = reqSnap.data?.docs.length ?? 0;
-                      return Chip(
-                        avatar: const Icon(Icons.pending_actions, size: 16),
-                        label: Text("$count pending"),
-                      );
-                    },
-                  ),
+                  if (showHostActions) ...[
+                    SizedBox(height: r(12)),
+                    Row(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ManageRequestsScreen(tripId: tripId),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.person_search),
+                          label: const Text("Manage Requests"),
+                        ),
+                        SizedBox(width: r(10)),
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection("tripRequests")
+                              .where("tripId", isEqualTo: tripId)
+                              .where("status", isEqualTo: "pending")
+                              .snapshots(),
+                          builder: (_, reqSnap) {
+                            final count = reqSnap.data?.docs.length ?? 0;
+                            return Chip(
+                              avatar: const Icon(
+                                Icons.pending_actions,
+                                size: 16,
+                              ),
+                              label: Text("$count pending"),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Text(
+                          "View Details",
+                          style: TextStyle(
+                            color: tint,
+                            fontWeight: FontWeight.w800,
+                            fontSize: r(12.5),
+                          ),
+                        ),
+                        const Spacer(),
+                        Icon(Icons.chevron_right_rounded, color: tint),
+                      ],
+                    ),
+                  ],
                 ],
               ),
-            ],
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _metaLine(BuildContext context, IconData icon, String text) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    return Padding(
+      padding: EdgeInsets.only(top: r(2)),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: r(14),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.60),
+          ),
+          SizedBox(width: r(7)),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.66),
+                fontSize: r(11.5),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusPill(BuildContext context, String text, _TripStatus status) {
+    final r = context.rs;
+    final color = switch (status) {
+      _TripStatus.completed => Colors.green,
+      _TripStatus.cancelled => Colors.redAccent,
+      _TripStatus.upcoming => AppTheme.brandOrange,
+    };
+    final icon = switch (status) {
+      _TripStatus.completed => Icons.check_circle_outline_rounded,
+      _TripStatus.cancelled => Icons.cancel_outlined,
+      _TripStatus.upcoming => Icons.schedule_rounded,
+    };
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: r(9), vertical: r(6)),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(r(18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: r(13)),
+          SizedBox(width: r(4)),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w800,
+              fontSize: r(10.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  (_TripStatus, String) _status(Map<String, dynamic> data) {
+    if (data["cancelled"] == true || data["status"] == "cancelled") {
+      return (_TripStatus.cancelled, "Cancelled");
+    }
+    if (isPast(data)) return (_TripStatus.completed, "Completed");
+    return (_TripStatus.upcoming, "Upcoming");
+  }
+
+  Color _destinationColor(String? destination, _TripStatus status) {
+    if (status == _TripStatus.cancelled) return Colors.redAccent;
+    final value = (destination ?? "").toLowerCase();
+    if (value.contains("railway")) return const Color(0xFF7C4DFF);
+    if (value.contains("city")) return const Color(0xFF28A745);
+    if (value.contains("hospital")) return AppTheme.brandOrange;
+    if (value.contains("bus")) return const Color(0xFF7C4DFF);
+    return AppTheme.brandOrange;
   }
 
   Widget _hosting(String uid, BuildContext context) {
@@ -225,19 +416,18 @@ class MyTripsScreen extends StatelessWidget {
           .where("ownerId", isEqualTo: uid)
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData)
+        if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
-
+        }
         final active = snap.data!.docs
             .where((e) => e.exists && e.data() != null)
             .where((e) => isActive(e.data() as Map<String, dynamic>))
             .toList();
-
         if (active.isEmpty) {
           return const Center(child: Text("No active hosted trips"));
         }
-
         return ListView(
+          padding: EdgeInsets.only(bottom: context.rs(96)),
           children: active.map((doc) {
             final d = doc.data() as Map<String, dynamic>;
             return _card(context, doc.id, d, showHostActions: true);
@@ -254,31 +444,26 @@ class MyTripsScreen extends StatelessWidget {
           .where("userId", isEqualTo: uid)
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData)
+        if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
-
-        final parts = snap.data!.docs;
-        if (parts.isEmpty) {
-          return const Center(child: Text("No joined trips"));
         }
-
+        final parts = snap.data!.docs;
+        if (parts.isEmpty) return const Center(child: Text("No joined trips"));
         return FutureBuilder<List<DocumentSnapshot>>(
           future: _fetchTrips(parts),
           builder: (_, tripSnap) {
             if (!tripSnap.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
-
             final trips = tripSnap.data!
                 .where((e) => e.exists && e.data() != null)
                 .where((e) => isActive(e.data() as Map<String, dynamic>))
                 .toList();
-
             if (trips.isEmpty) {
               return const Center(child: Text("No active joined trips"));
             }
-
             return ListView(
+              padding: EdgeInsets.only(bottom: context.rs(96)),
               children: trips.map((doc) {
                 final d = doc.data() as Map<String, dynamic>;
                 return _card(context, doc.id, d);
@@ -298,26 +483,24 @@ class MyTripsScreen extends StatelessWidget {
           .where("status", isEqualTo: "pending")
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData)
+        if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
-
+        }
         final reqs = snap.data!.docs;
         if (reqs.isEmpty) {
           return const Center(child: Text("No pending requests"));
         }
-
         return FutureBuilder<List<DocumentSnapshot>>(
           future: _fetchTrips(reqs),
           builder: (_, tripSnap) {
             if (!tripSnap.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
-
             final trips = tripSnap.data!
                 .where((s) => s.exists && s.data() != null)
                 .toList();
-
             return ListView(
+              padding: EdgeInsets.only(bottom: context.rs(96)),
               children: trips.map((doc) {
                 final d = doc.data() as Map<String, dynamic>;
                 return _card(context, doc.id, d);
@@ -336,23 +519,22 @@ class MyTripsScreen extends StatelessWidget {
           .where("userId", isEqualTo: uid)
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData)
+        if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         final participantDocs = snap.data!.docs;
-
         return FutureBuilder<List<DocumentSnapshot>>(
           future: _fetchHistoryTrips(uid, participantDocs),
           builder: (_, historySnap) {
             if (!historySnap.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
-
             final historyDocs = historySnap.data!;
             if (historyDocs.isEmpty) {
               return const Center(child: Text("No trip history"));
             }
-
             return ListView(
+              padding: EdgeInsets.only(bottom: context.rs(96)),
               children: historyDocs.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 return _card(
@@ -385,46 +567,47 @@ class MyTripsScreen extends StatelessWidget {
           .where("userId", isEqualTo: uid)
           .snapshots(),
       builder: (_, snap) {
-        if (!snap.hasData)
+        if (!snap.hasData) {
           return const Center(child: CircularProgressIndicator());
+        }
         final participantDocs = snap.data!.docs;
-
         return FutureBuilder<List<Map<String, dynamic>>>(
           future: _fetchPeople(uid, participantDocs),
           builder: (_, peopleSnap) {
             if (!peopleSnap.hasData) {
               return const Center(child: CircularProgressIndicator());
             }
-
             final people = peopleSnap.data!;
             if (people.isEmpty) {
               return const Center(
                 child: Text("No people found from your trips"),
               );
             }
-
             return ListView.builder(
-              padding: EdgeInsets.all(r(12)),
+              padding: EdgeInsets.fromLTRB(r(16), r(8), r(16), r(96)),
               itemCount: people.length,
               itemBuilder: (_, i) {
                 final person = people[i];
                 final name = (person["name"] ?? "User").toString();
                 final tripsTogether = (person["tripsTogether"] ?? 0) as int;
-
                 return Container(
                   margin: EdgeInsets.only(bottom: r(10)),
                   padding: EdgeInsets.all(r(14)),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(r(16)),
-                    boxShadow: const [
-                      BoxShadow(blurRadius: 8, color: Colors.black12),
-                    ],
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF101B25)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(r(18)),
+                    border: Border.all(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.08),
+                    ),
                   ),
                   child: ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const CircleAvatar(
-                      backgroundColor: Color(0xffff7a00),
+                      backgroundColor: AppTheme.brandOrange,
                       child: Icon(Icons.person, color: Colors.white),
                     ),
                     title: Text(
@@ -452,7 +635,6 @@ class MyTripsScreen extends StatelessWidget {
         .where("ownerId", isEqualTo: uid)
         .get();
     final joinedTripsFuture = _fetchTrips(participantDocs);
-
     final ownerTrips = await ownerTripsFuture;
     final joinedTrips = await joinedTripsFuture;
 
@@ -492,7 +674,6 @@ class MyTripsScreen extends StatelessWidget {
     if (historyTrips.isEmpty) return const [];
 
     final peopleById = <String, Map<String, dynamic>>{};
-
     for (final tripDoc in historyTrips) {
       if (!tripDoc.exists || tripDoc.data() == null) continue;
       final tripData = tripDoc.data() as Map<String, dynamic>;
@@ -517,7 +698,6 @@ class MyTripsScreen extends StatelessWidget {
         final data = part.data();
         final userId = (data["userId"] ?? "").toString();
         if (userId.isEmpty || userId == uid) continue;
-
         final existing =
             peopleById[userId] ??
             {
@@ -556,3 +736,5 @@ class MyTripsScreen extends StatelessWidget {
     return Future.wait(futures);
   }
 }
+
+enum _TripStatus { completed, upcoming, cancelled }
