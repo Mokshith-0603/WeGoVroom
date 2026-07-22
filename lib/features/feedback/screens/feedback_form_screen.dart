@@ -2,6 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../theme/app_theme.dart';
+import '../../../utils/responsive.dart';
+
 class FeedbackFormScreen extends StatelessWidget {
   const FeedbackFormScreen({super.key});
 
@@ -19,140 +22,229 @@ class FeedbackFormScreen extends StatelessWidget {
           ? LaunchMode.platformDefault
           : LaunchMode.externalApplication,
     );
-    if (opened) return;
-
-    if (!context.mounted) return;
+    if (opened || !context.mounted) return;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Could not open $label form')));
   }
 
-  Widget _card({
-    required BuildContext context,
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    final isDark = theme.brightness == Brightness.dark;
+    return Scaffold(
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                'Feedback/Report an Issue',
+                style: theme.textTheme.titleLarge?.copyWith(fontSize: r(20)),
+              ),
+            ),
+            SizedBox(width: r(8)),
+            const Icon(Icons.rate_review_rounded, color: AppTheme.brandOrange),
+          ],
+        ),
+      ),
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: isDark
+                ? const [Color(0xFF07131E), Color(0xFF0A1722)]
+                : const [Color(0xFFFFFEFC), Color(0xFFFBF7F2)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: ListView(
+          physics: const BouncingScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(r(20), r(4), r(20), r(28)),
+          children: [
+            Text(
+              'Help us improve WeGoVroom',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.68),
+              ),
+            ),
+            SizedBox(height: r(30)),
+            _card(
+              context,
+              title: 'Feedback',
+              subtitle: 'Share your feedback\nwith WeGoVroom',
+              description:
+                  'Your feedback helps us improve your experience and build a better app for you.',
+              icon: Icons.rate_review_rounded,
+              artIcon: Icons.assignment_rounded,
+              color: AppTheme.brandOrange,
+              buttonText: 'Open Feedback Form',
+              onPressed: () =>
+                  _openLink(context, _feedbackFormUri, 'feedback'),
+            ),
+            SizedBox(height: r(20)),
+            _card(
+              context,
+              title: 'Report an Issue',
+              subtitle: 'Report misbehavior,\nsafety, or service issues',
+              description:
+                  'Help us keep the community safe and fix issues quickly.',
+              icon: Icons.warning_rounded,
+              artIcon: Icons.gpp_maybe_rounded,
+              color: const Color(0xFFFF3D5F),
+              buttonText: 'Open Issue Report Form',
+              onPressed: () =>
+                  _openLink(context, _reportIssueFormUri, 'issue report'),
+            ),
+            SizedBox(height: r(24)),
+            Container(
+              padding: EdgeInsets.all(r(20)),
+              decoration: _surface(context, r(22)),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.volunteer_activism_rounded,
+                    color: AppTheme.brandOrange,
+                    size: r(46),
+                  ),
+                  SizedBox(width: r(16)),
+                  Expanded(
+                    child: Text(
+                      'Together, we can create a better and safer journey for everyone.',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _card(
+    BuildContext context, {
     required String title,
     required String subtitle,
-    required IconData leadingIcon,
-    required IconData badgeIcon,
+    required String description,
+    required IconData icon,
+    required IconData artIcon,
+    required Color color,
     required String buttonText,
     required VoidCallback onPressed,
   }) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.78),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
-        boxShadow: const [
-          BoxShadow(
-            blurRadius: 10,
-            color: Colors.black12,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
+      padding: EdgeInsets.all(r(20)),
+      decoration: _surface(context, r(24)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Icon(leadingIcon, color: const Color(0xffff7a00)),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
+              Container(
+                width: r(58),
+                height: r(58),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: isDark ? 0.10 : 0.09),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color.withValues(alpha: 0.18)),
                 ),
+                child: Icon(icon, color: color, size: r(30)),
               ),
               const Spacer(),
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(9),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xffffc27a),
-                      Color(0xffff9c1a),
-                      Color(0xffff7a00),
-                    ],
-                  ),
-                ),
-                child: Icon(badgeIcon, color: Colors.white, size: 18),
-              ),
+              Icon(artIcon, color: color, size: r(78)),
             ],
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: r(14)),
+          Text(
+            title,
+            style: theme.textTheme.headlineMedium?.copyWith(fontSize: r(22)),
+          ),
+          SizedBox(height: r(12)),
           Text(
             subtitle,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: Color(0xffff7a00),
-              letterSpacing: 0.3,
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: color,
+              fontSize: r(20),
+              height: 1.35,
             ),
           ),
-          const SizedBox(height: 12),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xffff7a00),
-              foregroundColor: Colors.black,
+          SizedBox(height: r(14)),
+          Text(
+            description,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.68),
             ),
-            onPressed: onPressed,
-            icon: const Icon(Icons.open_in_new),
-            label: Text(buttonText),
+          ),
+          SizedBox(height: r(22)),
+          Material(
+            color: isDark ? Colors.transparent : color,
+            borderRadius: BorderRadius.circular(r(20)),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(r(20)),
+              onTap: onPressed,
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: r(18),
+                  vertical: r(17),
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(r(20)),
+                  border: Border.all(color: color, width: 1.2),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.open_in_new_rounded,
+                      color: isDark ? color : Colors.white,
+                    ),
+                    SizedBox(width: r(12)),
+                    Expanded(
+                      child: Text(
+                        buttonText,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: isDark ? color : Colors.white,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: isDark ? color : Colors.white,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xfff5f5f7),
-      appBar: AppBar(
-        title: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('Feedback/Report an Issue'),
-            SizedBox(width: 8),
-            Icon(Icons.feedback_outlined, color: Color(0xffff7a00), size: 20),
-          ],
+  BoxDecoration _surface(BuildContext context, double radius) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return BoxDecoration(
+      color: isDark ? const Color(0xFF101A24) : Colors.white,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.09)
+            : const Color(0xFFEAE6E0),
+      ),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: isDark ? 0.20 : 0.06),
+          blurRadius: 22,
+          offset: const Offset(0, 10),
         ),
-        backgroundColor: const Color(0xfff5f5f7),
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _card(
-            context: context,
-            title: 'Feedback',
-            subtitle: 'Share your feedback with WeGoVroom',
-            leadingIcon: Icons.rate_review_outlined,
-            badgeIcon: Icons.rate_review,
-            buttonText: 'Open Feedback Form',
-            onPressed: () => _openLink(context, _feedbackFormUri, 'feedback'),
-          ),
-          const SizedBox(height: 14),
-          _card(
-            context: context,
-            title: 'Report an Issue',
-            subtitle: 'Report misbehavior, safety, or service issues',
-            leadingIcon: Icons.report_problem_outlined,
-            badgeIcon: Icons.gpp_maybe_outlined,
-            buttonText: 'Open Issue Report Form',
-            onPressed: () =>
-                _openLink(context, _reportIssueFormUri, 'issue report'),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

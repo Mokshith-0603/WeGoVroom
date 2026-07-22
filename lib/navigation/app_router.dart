@@ -5,22 +5,11 @@ import 'package:provider/provider.dart';
 import '../features/auth/screens/app_home_screen.dart';
 import '../features/profile/screens/profile_setup_screen.dart';
 import '../providers/auth_provider.dart';
+import '../services/trip_link_service.dart';
 import 'main_navigation.dart';
 
 class AppRouter extends StatelessWidget {
   const AppRouter({super.key});
-
-  String? _tripIdFromUri(Uri uri) {
-    final fromQuery = uri.queryParameters["tripId"];
-    if (fromQuery != null && fromQuery.isNotEmpty) return fromQuery;
-
-    final fragment = uri.fragment;
-    if (fragment.isEmpty) return null;
-    final queryStart = fragment.indexOf("?");
-    if (queryStart == -1) return null;
-    final query = fragment.substring(queryStart + 1);
-    return Uri.splitQueryString(query)["tripId"];
-  }
 
   Future<bool> _profileDone(String uid) async {
     try {
@@ -71,7 +60,7 @@ class AppRouter extends StatelessWidget {
           return const ProfileSetupScreen();
         }
 
-        final deepTripId = _tripIdFromUri(Uri.base);
+        final deepTripId = TripLinkService.instance.tripIdFromUri(Uri.base);
         return MainNavigation(initialTripId: deepTripId);
       },
     );

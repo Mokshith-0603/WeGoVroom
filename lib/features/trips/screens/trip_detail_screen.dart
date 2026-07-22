@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
 import '../../../providers/user_profile_provider.dart';
+import '../../../services/trip_link_service.dart';
+import '../../../theme/app_theme.dart';
 import '../../profile/widgets/avatar_utils.dart';
 import 'manage_requests_screen.dart';
 
@@ -24,6 +26,36 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
   bool joinedAlready = false;
   bool hasPendingRequest = false;
   String? pendingRequestId;
+
+  Future<void> _shareTrip(
+    Map<String, dynamic> trip, {
+    bool whatsappOnly = false,
+  }) async {
+    try {
+      if (whatsappOnly) {
+        final opened = await TripLinkService.instance.shareTripToWhatsApp(
+          tripId: widget.tripId,
+          trip: trip,
+        );
+        if (!opened && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Could not open WhatsApp")),
+          );
+        }
+        return;
+      }
+
+      await TripLinkService.instance.shareTrip(
+        tripId: widget.tripId,
+        trip: trip,
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Could not share trip link")),
+      );
+    }
+  }
 
   Widget _buildParticipantTile({
     required QueryDocumentSnapshot p,
@@ -1300,133 +1332,153 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
             : "";
 
         final theme = Theme.of(context);
-        final scheme = theme.colorScheme;
-        final secondary = scheme.secondary;
-        final bg = theme.scaffoldBackgroundColor;
+        final secondary = AppTheme.brandOrange;
+        final isDark = theme.brightness == Brightness.dark;
 
         return Scaffold(
-          backgroundColor: bg,
-          body: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.fromLTRB(12, 48, 12, 12),
-                color: bg,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.arrow_back),
-                    ),
-                    Row(
+          body: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: isDark
+                    ? const [Color(0xFF070D12), Color(0xFF0D1013)]
+                    : const [Color(0xFFFFFEFC), Color(0xFFF8F5F0)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(22, 10, 22, 120),
                       children: [
-                        Text(
-                          "WeGoVroom",
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            color: secondary,
+                        Row(
+                          children: [
+                            IconButton(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.arrow_back),
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.ios_share_rounded,
+                                color: AppTheme.brandOrange,
+                              ),
+                              tooltip: "Share trip link",
+                              onPressed: () => _shareTrip(d),
+                            ),
+                            IconButton(
+                              icon: const Icon(
+                                Icons.chat_rounded,
+                                color: Color(0xFF25D366),
+                              ),
+                              tooltip: "Share on WhatsApp",
+                              onPressed: () => _shareTrip(
+                                d,
+                                whatsappOnly: true,
+                              ),
+                            ),
+                            if (isCreator && !tripEnded)
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.group_add,
+                                  color: AppTheme.brandOrange,
+                                ),
+                                tooltip: "Manage requests",
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ManageRequestsScreen(
+                                        tripId: widget.tripId,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            if (isCreator && !tripEnded)
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit,
+                                  color: AppTheme.brandOrange,
+                                ),
+                                onPressed: () => _openEditTripDialog(d),
+                              ),
+                            if (canDeleteTrip)
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.redAccent,
+                                ),
+                                onPressed: deleteTrip,
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        RichText(
+                          text: TextSpan(
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              fontSize: 25,
+                              fontWeight: FontWeight.w900,
+                            ),
+                            children: const [
+                              TextSpan(
+                                text: "WeGo",
+                                style: TextStyle(color: AppTheme.brandOrange),
+                              ),
+                              TextSpan(text: "Vroom"),
+                            ],
                           ),
                         ),
-                        const Spacer(),
-                        if (isCreator && !tripEnded)
-                          IconButton(
-                            icon: const Icon(
-                              Icons.group_add,
-                              color: Color(0xffff7a00),
-                            ),
-                            tooltip: "Manage requests",
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ManageRequestsScreen(
-                                    tripId: widget.tripId,
-                                  ),
-                                ),
-                              );
-                            },
+                        const SizedBox(height: 24),
+                        Text(
+                          "${d["from"]} → ${d["to"]}",
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontSize: 27,
+                            letterSpacing: -0.8,
                           ),
-                        if (isCreator && !tripEnded)
-                          IconButton(
-                            icon: const Icon(
-                              Icons.edit,
-                              color: Color(0xffff7a00),
-                            ),
-                            onPressed: () => _openEditTripDialog(d),
-                          ),
-                        if (canDeleteTrip)
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: deleteTrip,
-                          ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    Text(
-                      "${d["from"]} -> ${d["to"]}",
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontSize: 20,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _card(
-                      child: Column(
+                        ),
+                        const SizedBox(height: 18),
+                        _tripHero(context),
+                        const SizedBox(height: 20),
+                        _card(
+                          child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.calendar_today,
-                                size: 16,
-                                color: theme.iconTheme.color,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(dateText),
-                              const Spacer(),
-                              Text(timeText),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Icon(
-                                isPublicTrip
-                                    ? Icons.public
-                                    : Icons.lock_outline,
-                                size: 16,
-                                color: Colors.grey[700],
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
+                          Row(children: [
+                            Expanded(child: _infoItem(Icons.calendar_today, dateText)),
+                            Expanded(child: _infoItem(Icons.schedule, timeText)),
+                          ]),
+                          const SizedBox(height: 14),
+                          Row(children: [
+                            Expanded(
+                              child: _infoItem(
+                                isPublicTrip ? Icons.public : Icons.lock_outline,
                                 isPublicTrip ? "Public trip" : "Private trip",
                               ),
-                              const Spacer(),
-                              Icon(
+                            ),
+                            Expanded(
+                              child: _infoItem(
                                 Icons.currency_rupee,
-                                color: Colors.green[700],
+                                "${d["cost"]}/person",
+                                color: Colors.green,
                               ),
-                              Text("${d["cost"]}/person"),
-                              const Spacer(),
-                              Text(
-                                "$joined/$max joined",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
+                            ),
+                          ]),
+                          const SizedBox(height: 14),
+                          _infoItem(
+                            Icons.groups_rounded,
+                            "$joined / $max joined",
+                            color: Colors.green,
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Icon(Icons.location_on, color: Colors.red[700]),
-                              const SizedBox(width: 6),
-                              Expanded(child: Text(d["meetingPoint"] ?? "")),
-                            ],
+                          const Divider(height: 28),
+                          _infoItem(
+                            Icons.location_on,
+                            (d["meetingPoint"] ?? "").toString(),
+                            subtitle: "Pickup point",
+                            color: Colors.redAccent,
                           ),
                           if ((d["description"] ?? "")
                               .toString()
@@ -1446,30 +1498,20 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     if (isCreator && !tripEnded)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          "Disclaimer: If you don't complete this trip manually, it will be completed automatically 12 hours after the selected trip time.",
-                          style: TextStyle(
-                            color: Colors.grey[700],
-                            fontSize: 12,
-                          ),
-                        ),
+                      _disclaimerCard(
+                        context,
+                        "If you don't complete this trip manually, it will be completed automatically 12 hours after the selected trip time.",
                       ),
-                    if (autoEnded && !completed)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: Text(
-                          "This trip has reached 12 hours after the selected time and is treated as completed.",
-                          style: TextStyle(
-                            color: Colors.grey[700],
-                            fontSize: 12,
-                          ),
-                        ),
+                    if (autoEnded && !completed) ...[
+                      const SizedBox(height: 18),
+                      _disclaimerCard(
+                        context,
+                        "This trip has reached 12 hours after the selected time and is treated as completed.",
                       ),
-                    const SizedBox(height: 16),
+                    ],
+                    const SizedBox(height: 18),
                     if (isCreator && !isPublicTrip && !tripEnded)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 12),
@@ -1499,40 +1541,54 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                       allowHostRemove: isCreator && !tripEnded,
                       tripData: d,
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     _reviewsSection(),
-                    const SizedBox(height: 120),
-                  ],
-                ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
           bottomNavigationBar: (() {
+            Widget wrap(Widget child) {
+              return Container(
+                padding: const EdgeInsets.fromLTRB(22, 10, 22, 22),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF0D1013) : const Color(0xFFFFFEFC),
+                ),
+                child: SizedBox(height: 58, child: child),
+              );
+            }
+
+            final buttonShape = RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            );
+
             if (isCreator && !tripEnded) {
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: SizedBox(
-                  height: 56,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: secondary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(30),
+              return wrap(
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: secondary,
+                    foregroundColor: Colors.white,
+                    shape: buttonShape,
+                  ),
+                  onPressed: () async {
+                    await db.collection("trips").doc(widget.tripId).update({
+                      "completed": true,
+                      "completedAt": FieldValue.serverTimestamp(),
+                    });
+                  },
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        "Complete Trip",
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
-                    ),
-                    onPressed: () async {
-                      await db.collection("trips").doc(widget.tripId).update({
-                        "completed": true,
-                        "completedAt": FieldValue.serverTimestamp(),
-                      });
-                    },
-                    child: const Text(
-                      "Complete Trip",
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                      SizedBox(width: 10),
+                      Icon(Icons.check_circle_outline),
+                    ],
                   ),
                 ),
               );
@@ -1542,63 +1598,46 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               final canJoinAction = isPublicTrip
                   ? !loading && seatsLeft > 0 && !joinWindowClosed
                   : !loading && !joinWindowClosed && !hasPendingRequest;
-              return Padding(
-                padding: const EdgeInsets.all(16),
-                child: SizedBox(
-                  height: 56,
-                  child: joinedAlready
-                      ? ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red[300],
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                          onPressed: loading
-                              ? null
-                              : () => _openLeaveTripDialog(d),
-                          child: loading
-                              ? const CircularProgressIndicator(
-                                  color: Colors.white,
-                                )
-                              : const Text(
-                                  "Leave Trip",
-                                  style: TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                        )
-                      : ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: secondary,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                          onPressed: canJoinAction ? () => handleJoin(d) : null,
-                          child: loading
-                              ? const CircularProgressIndicator(
-                                  color: Colors.white,
-                                )
-                              : Text(
-                                  joinWindowClosed
-                                      ? "Join Closed"
-                                      : (isPublicTrip
-                                            ? "Join Trip"
-                                            : (hasPendingRequest
-                                                  ? "Request Sent"
-                                                  : "Request to Join")),
-                                  style: const TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+              return wrap(
+                joinedAlready
+                    ? ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red[300],
+                          foregroundColor: Colors.white,
+                          shape: buttonShape,
                         ),
-                ),
+                        onPressed: loading ? null : () => _openLeaveTripDialog(d),
+                        child: loading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                                "Leave Trip",
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                      )
+                    : ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: secondary,
+                          foregroundColor: Colors.white,
+                          shape: buttonShape,
+                        ),
+                        onPressed: canJoinAction ? () => handleJoin(d) : null,
+                        child: loading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : Text(
+                                joinWindowClosed
+                                    ? "Join Closed"
+                                    : (isPublicTrip
+                                          ? "Join Trip"
+                                          : (hasPendingRequest
+                                                ? "Request Sent"
+                                                : "Request to Join")),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
               );
             }
-
             return null;
           })(),
         );
@@ -1606,13 +1645,148 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     );
   }
 
-  Widget _card({required Widget child}) {
+  Widget _tripHero(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      height: 150,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? const [Color(0xFF101B25), Color(0xFF151719)]
+              : const [Color(0xFFFFF1E4), Color(0xFFFFFBF7)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Positioned(
+            left: 20,
+            child: Icon(
+              Icons.location_on,
+              color: AppTheme.brandOrange,
+              size: 44,
+            ),
+          ),
+          Positioned(
+            right: 22,
+            child: Icon(
+              Icons.location_on,
+              color: Colors.indigoAccent,
+              size: 44,
+            ),
+          ),
+          Icon(
+            Icons.route_rounded,
+            color: AppTheme.brandOrange.withValues(alpha: 0.24),
+            size: 118,
+          ),
+          Icon(
+            Icons.directions_bus_rounded,
+            color: AppTheme.brandOrange,
+            size: 66,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoItem(
+    IconData icon,
+    String text, {
+    String? subtitle,
+    Color? color,
+  }) {
+    final theme = Theme.of(context);
+    final tint = color ?? theme.colorScheme.onSurface.withValues(alpha: 0.72);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: tint, size: 22),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                text,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (subtitle != null)
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.56),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _disclaimerCard(BuildContext context, String message) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.brandOrange.withValues(alpha: isDark ? 0.08 : 0.07),
         borderRadius: BorderRadius.circular(18),
-        boxShadow: const [BoxShadow(blurRadius: 12, color: Colors.black12)],
+        border: Border.all(
+          color: AppTheme.brandOrange.withValues(alpha: isDark ? 0.28 : 0.20),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, color: AppTheme.brandOrange),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  const TextSpan(
+                    text: "Disclaimer:\n",
+                    style: TextStyle(
+                      color: AppTheme.brandOrange,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  TextSpan(text: message),
+                ],
+              ),
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required Widget child}) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF101B25) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.09)
+              : const Color(0xFFEAE5DE),
+        ),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 18,
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06),
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: child,
     );

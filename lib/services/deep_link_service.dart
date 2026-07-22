@@ -1,1 +1,1 @@
-// This file is deprecated and can be deleted.
+export 'trip_link_service.dart';

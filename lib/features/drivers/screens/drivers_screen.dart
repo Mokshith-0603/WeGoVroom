@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../utils/transport_icons.dart';
 import '../../../utils/responsive.dart';
+import '../../../theme/app_theme.dart';
 
 class DriversScreen extends StatefulWidget {
   const DriversScreen({super.key});
@@ -56,13 +57,22 @@ class _DriversScreenState extends State<DriversScreen> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (_) {
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final r = sheetContext.rs;
+        final isDark = theme.brightness == Brightness.dark;
+
         return SafeArea(
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.72,
+          child: Container(
+            height: MediaQuery.of(sheetContext).size.height * 0.74,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF07111B) : const Color(0xFFFFFCF8),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(r(28))),
+              border: Border.all(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+              ),
+            ),
             child: StreamBuilder<QuerySnapshot>(
               stream: _db
                   .collection('driverReviews')
@@ -85,11 +95,9 @@ class _DriversScreenState extends State<DriversScreen> {
                   );
                 }
 
-                final rawDocs = List<QueryDocumentSnapshot>.from(
+                final docs = List<QueryDocumentSnapshot>.from(
                   snap.data?.docs ?? const [],
                 );
-
-                final docs = [...rawDocs];
                 docs.sort((a, b) {
                   final ad = _reviewTimestamp(
                     a.data() as Map<String, dynamic>,
@@ -97,55 +105,104 @@ class _DriversScreenState extends State<DriversScreen> {
                   final bd = _reviewTimestamp(
                     b.data() as Map<String, dynamic>,
                   )?.toDate();
-                  if (ad == null && bd == null) {
-                    return b.id.compareTo(a.id);
-                  }
+                  if (ad == null && bd == null) return b.id.compareTo(a.id);
                   if (ad == null) return 1;
                   if (bd == null) return -1;
-                  // Newest first.
                   final cmp = bd.compareTo(ad);
                   if (cmp != 0) return cmp;
                   return b.id.compareTo(a.id);
                 });
 
+                final ratings = docs.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  return ((data['rating'] ?? 0) as num).toDouble();
+                }).where((rating) => rating > 0).toList();
+                final average = ratings.isEmpty
+                    ? 0.0
+                    : ratings.reduce((a, b) => a + b) / ratings.length;
+
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                      child: Text(
-                        '$driverName Reviews',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      padding: EdgeInsets.fromLTRB(r(18), r(12), r(18), r(12)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Center(
+                            child: Container(
+                              width: r(42),
+                              height: r(4),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: r(18)),
+                          Row(
+                            children: [
+                              Container(
+                                width: r(52),
+                                height: r(52),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      AppTheme.brandOrangeLight,
+                                      AppTheme.brandOrange,
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(r(16)),
+                                ),
+                                child: const Icon(
+                                  Icons.rate_review_rounded,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(width: r(14)),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '$driverName Reviews',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.titleLarge?.copyWith(
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    SizedBox(height: r(3)),
+                                    Text(
+                                      docs.isEmpty
+                                          ? 'No reviews yet'
+                                          : '${average.toStringAsFixed(1)}/5 from ${docs.length} review${docs.length == 1 ? '' : 's'}',
+                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                        color: theme.colorScheme.onSurface.withValues(alpha: 0.64),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => Navigator.pop(sheetContext),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                     Expanded(
                       child: docs.isEmpty
-                          ? const Center(child: Text('No reviews yet'))
+                          ? _emptyDriverReviews(sheetContext)
                           : ListView.builder(
+                              padding: EdgeInsets.fromLTRB(r(18), 0, r(18), r(20)),
                               itemCount: docs.length,
                               itemBuilder: (_, i) {
-                                final data =
-                                    docs[i].data() as Map<String, dynamic>;
-                                final reviewerName =
-                                    (data['reviewerName'] ?? '')
-                                        .toString()
-                                        .trim();
-                                final rating = ((data['rating'] ?? 0) as num)
-                                    .toDouble();
-                                final comment = (data['comment'] ?? '')
-                                    .toString();
-                                return ListTile(
-                                  leading: const Icon(Icons.person_outline),
-                                  title: Text(
-                                    '${reviewerName.isNotEmpty ? reviewerName : 'User'} - ${rating.toStringAsFixed(1)}/5',
-                                  ),
-                                  subtitle: comment.trim().isEmpty
-                                      ? const Text('No comment')
-                                      : Text(comment),
-                                );
+                                final data = docs[i].data() as Map<String, dynamic>;
+                                return _driverReviewCard(sheetContext, data);
                               },
                             ),
                     ),
@@ -159,6 +216,143 @@ class _DriversScreenState extends State<DriversScreen> {
     );
   }
 
+  Widget _emptyDriverReviews(BuildContext context) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    return Center(
+      child: Container(
+        margin: EdgeInsets.all(r(22)),
+        padding: EdgeInsets.all(r(22)),
+        decoration: BoxDecoration(
+          color: theme.brightness == Brightness.dark
+              ? const Color(0xFF101A24)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(r(22)),
+          border: Border.all(
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.reviews_rounded,
+              color: AppTheme.brandOrange,
+              size: r(38),
+            ),
+            SizedBox(height: r(10)),
+            Text(
+              'No reviews yet',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _driverReviewCard(BuildContext context, Map<String, dynamic> data) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    final isDark = theme.brightness == Brightness.dark;
+    final reviewerName = (data['reviewerName'] ?? '').toString().trim();
+    final rating = ((data['rating'] ?? 0) as num).toDouble();
+    final comment = (data['comment'] ?? '').toString().trim();
+
+    return Container(
+      margin: EdgeInsets.only(bottom: r(12)),
+      padding: EdgeInsets.all(r(14)),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF101A24) : Colors.white,
+        borderRadius: BorderRadius.circular(r(20)),
+        border: Border.all(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.07),
+        ),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.045),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: r(22),
+            backgroundColor: AppTheme.brandOrange.withValues(alpha: 0.14),
+            child: Icon(
+              Icons.person_rounded,
+              color: AppTheme.brandOrange,
+              size: r(22),
+            ),
+          ),
+          SizedBox(width: r(12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        reviewerName.isNotEmpty ? reviewerName : 'User',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: r(8),
+                        vertical: r(4),
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.brandOrange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.star_rounded,
+                            color: AppTheme.brandOrange,
+                            size: r(15),
+                          ),
+                          SizedBox(width: r(3)),
+                          Text(
+                            rating.toStringAsFixed(1),
+                            style: TextStyle(
+                              color: AppTheme.brandOrange,
+                              fontSize: r(12),
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: r(7)),
+                Text(
+                  comment.isEmpty ? 'No comment' : comment,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.66),
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   Future<void> _openDriverReviewDialog({
     required String driverId,
     required String driverName,
@@ -535,130 +729,280 @@ class _DriversScreenState extends State<DriversScreen> {
     final fallbackRating = ((d['rating'] ?? 4.5) as num).toDouble();
     final vehicleIcon = vehicleTransportIcon(vehicle.toString());
     final uid = _auth.currentUser?.uid;
-
     final theme = Theme.of(context);
-    final secondary = theme.colorScheme.secondary;
     final r = context.rs;
+    final isDark = theme.brightness == Brightness.dark;
+    final average = reviewSummary.averageOr(fallbackRating);
+    final countLabel = reviewSummary.count == 1 ? 'review' : 'reviews';
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.64);
 
     return Container(
-      margin: EdgeInsets.only(bottom: r(14)),
-      padding: EdgeInsets.all(r(16)),
+      margin: EdgeInsets.fromLTRB(r(20), 0, r(20), r(18)),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(r(18)),
-        boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black12)],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: r(28),
-            backgroundColor: secondary,
-            child: Icon(vehicleIcon, color: Colors.white),
+        color: isDark ? const Color(0xFF101A24) : Colors.white,
+        borderRadius: BorderRadius.circular(r(24)),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : const Color(0xFFEAE5DE),
+        ),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 24,
+            color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.07),
+            offset: const Offset(0, 12),
           ),
-          SizedBox(width: r(14)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: r(16),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(r(24)),
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.all(r(16)),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    alignment: Alignment.bottomCenter,
+                    children: [
+                      Container(
+                        width: r(82),
+                        height: r(82),
+                        decoration: BoxDecoration(
+                          color: AppTheme.brandOrange.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(r(22)),
+                        ),
+                        child: Icon(
+                          vehicleIcon,
+                          color: AppTheme.brandOrange,
+                          size: r(36),
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: r(8),
+                          vertical: r(4),
+                        ),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              AppTheme.brandOrange,
+                              AppTheme.brandOrangeLight,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.star_rounded,
+                              color: Colors.white,
+                              size: r(12),
+                            ),
+                            SizedBox(width: r(2)),
+                            Text(
+                              average.toStringAsFixed(1),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: r(11),
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                Text(vehicle, style: const TextStyle(color: Colors.grey)),
-                SizedBox(height: r(4)),
-                Text(
-                  'Phone: $phone',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[800],
-                  ),
-                ),
-                SizedBox(height: r(4)),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                  SizedBox(width: r(16)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.star, size: r(16), color: secondary),
                         Text(
-                          '${reviewSummary.averageOr(fallbackRating).toStringAsFixed(1)} (${reviewSummary.count} reviews)',
+                          name.toString(),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            height: 1.08,
+                          ),
+                        ),
+                        SizedBox(height: r(5)),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: r(8),
+                            vertical: r(4),
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.brandOrange.withValues(
+                              alpha: isDark ? 0.16 : 0.10,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            vehicle.toString().isEmpty
+                                ? 'Auto'
+                                : vehicle.toString(),
+                            style: TextStyle(
+                              color: AppTheme.brandOrange,
+                              fontWeight: FontWeight.w800,
+                              fontSize: r(12),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: r(10)),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.phone_rounded,
+                              color: AppTheme.brandOrange,
+                              size: r(16),
+                            ),
+                            SizedBox(width: r(7)),
+                            Expanded(
+                              child: Text(
+                                phone.toString(),
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: muted,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: r(10)),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.star_rounded,
+                              color: AppTheme.brandOrange,
+                              size: r(17),
+                            ),
+                            SizedBox(width: r(6)),
+                            Flexible(
+                              child: Text(
+                                '${average.toStringAsFixed(1)} (${reviewSummary.count} $countLabel)',
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: muted,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    SizedBox(height: r(6)),
-                    TextButton.icon(
+                  ),
+                  if (phone.toString().trim().isNotEmpty)
+                    GestureDetector(
+                      onTap: () => callDriver(phone),
+                      child: Container(
+                        width: r(58),
+                        height: r(58),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppTheme.brandOrangeLight,
+                              AppTheme.brandOrange,
+                            ],
+                          ),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.brandOrange.withValues(
+                                alpha: isDark ? 0.34 : 0.25,
+                              ),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.call_rounded,
+                          color: Colors.white,
+                          size: r(25),
+                        ),
+                      ),
+                    ),
+                  if (_isAdminUser)
+                    PopupMenuButton<String>(
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _showEditDriverDialog(driverId, d);
+                        } else if (value == 'delete') {
+                          _deleteDriver(driverId);
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ],
+                      icon: Icon(
+                        Icons.more_vert_rounded,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.62,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Divider(
+              height: 1,
+              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
+            ),
+            Container(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.025)
+                  : const Color(0xFFFFFBF7),
+              padding: EdgeInsets.symmetric(horizontal: r(14), vertical: r(8)),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton.icon(
                       onPressed: () => _openDriverReviewsBottomSheet(
                         driverId: driverId,
                         driverName: name.toString(),
                       ),
-                      icon: const Icon(Icons.visibility_outlined),
+                      icon: const Icon(Icons.visibility_rounded),
                       label: const Text('View Reviews'),
                       style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size(0, r(28)),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        foregroundColor: AppTheme.brandOrange,
+                        alignment: Alignment.centerLeft,
                       ),
                     ),
-                    TextButton.icon(
+                  ),
+                  Expanded(
+                    child: TextButton.icon(
                       onPressed: uid == null
                           ? null
                           : () => _openDriverReviewDialog(
-                              driverId: driverId,
-                              driverName: name.toString(),
-                              initialRating: reviewSummary.myRating,
-                              initialComment: reviewSummary.myComment,
-                            ),
-                      icon: const Icon(Icons.rate_review_outlined),
+                                driverId: driverId,
+                                driverName: name.toString(),
+                                initialRating: reviewSummary.myRating,
+                                initialComment: reviewSummary.myComment,
+                              ),
+                      icon: const Icon(Icons.edit_square),
                       label: Text(
                         reviewSummary.myRating == null
                             ? 'Rate/Review'
                             : 'Edit Review',
                       ),
                       style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size(0, r(28)),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        foregroundColor: AppTheme.brandOrange,
+                        alignment: Alignment.centerRight,
                       ),
                     ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Column(
-            children: [
-              if (phone.toString().trim().isNotEmpty)
-                GestureDetector(
-                  onTap: () => callDriver(phone),
-                  child: Container(
-                    padding: EdgeInsets.all(r(10)),
-                    decoration: BoxDecoration(
-                      color: secondary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.call, color: Colors.white),
                   ),
-                ),
-              if (_isAdminUser) ...[
-                SizedBox(height: r(8)),
-                IconButton(
-                  tooltip: 'Edit Driver',
-                  onPressed: () => _showEditDriverDialog(driverId, d),
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Delete Driver',
-                  onPressed: () => _deleteDriver(driverId),
-                  icon: const Icon(Icons.delete_outline),
-                  color: Colors.red.shade600,
-                ),
-              ],
-            ],
-          ),
-        ],
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -686,39 +1030,284 @@ class _DriversScreenState extends State<DriversScreen> {
               _auth.currentUser?.uid,
             );
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: EdgeInsets.fromLTRB(r(16), r(12), r(16), r(8)),
-                  child: Text(
-                    'Best drivers who take you at the best price.',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey[700]),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    padding: EdgeInsets.all(r(16)),
-                    itemCount: docs.length,
-                    itemBuilder: (_, i) {
-                      final doc = docs[i];
-                      final d = doc.data() as Map<String, dynamic>;
-                      return _driverCard(
-                        doc.id,
-                        d,
-                        summaries[doc.id] ?? const _DriverReviewSummary(),
-                        context,
-                      );
-                    },
-                  ),
-                ),
-              ],
+            return ListView.builder(
+              padding: EdgeInsets.only(bottom: r(26)),
+              itemCount: docs.length + 1,
+              itemBuilder: (_, i) {
+                if (i == docs.length) return _safetyCard(context);
+                final doc = docs[i];
+                final d = doc.data() as Map<String, dynamic>;
+                return _driverCard(
+                  doc.id,
+                  d,
+                  summaries[doc.id] ?? const _DriverReviewSummary(),
+                  context,
+                );
+              },
             );
           },
         );
       },
+    );
+  }
+
+  Widget _driversHero(BuildContext context) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(r(20), r(8), r(20), r(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconButton(
+            onPressed: () => Navigator.maybePop(context),
+            icon: const Icon(Icons.arrow_back_rounded),
+            padding: EdgeInsets.zero,
+            alignment: Alignment.centerLeft,
+            color: theme.colorScheme.onSurface,
+          ),
+          SizedBox(height: r(8)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Drivers',
+                          style: theme.textTheme.displaySmall?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -1,
+                          ),
+                        ),
+                        SizedBox(width: r(10)),
+                        Icon(
+                          Icons.directions_car_filled_rounded,
+                          color: AppTheme.brandOrange,
+                          size: r(23),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: r(18)),
+                    Text(
+                      'Best drivers who take you\nat the best price.',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.68,
+                        ),
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                width: r(132),
+                height: r(88),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(r(24)),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: isDark
+                        ? [
+                            const Color(0xFF142334),
+                            const Color(0xFF07111B),
+                          ]
+                        : [
+                            const Color(0xFFFFF1E4),
+                            const Color(0xFFFFFBF7),
+                          ],
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: r(12),
+                      top: r(12),
+                      child: Icon(
+                        Icons.location_city_rounded,
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: isDark ? 0.12 : 0.08,
+                        ),
+                        size: r(58),
+                      ),
+                    ),
+                    Positioned(
+                      left: r(18),
+                      bottom: r(18),
+                      child: Container(
+                        width: r(54),
+                        height: r(34),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              AppTheme.brandOrangeLight,
+                              AppTheme.brandOrange,
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(r(18)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.brandOrange.withValues(
+                                alpha: 0.25,
+                              ),
+                              blurRadius: 16,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.local_taxi_rounded,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: r(24)),
+          _verifiedBanner(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _verifiedBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: EdgeInsets.all(r(16)),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF101A24) : const Color(0xFFFFF1E6),
+        borderRadius: BorderRadius.circular(r(20)),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : AppTheme.brandOrange.withValues(alpha: 0.10),
+        ),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 18,
+            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.05),
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: r(45),
+            height: r(45),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.brandOrangeLight, AppTheme.brandOrange],
+              ),
+              borderRadius: BorderRadius.circular(r(16)),
+            ),
+            child: const Icon(Icons.workspace_premium, color: Colors.white),
+          ),
+          SizedBox(width: r(14)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Verified & trusted drivers',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                SizedBox(height: r(2)),
+                Text(
+                  'Safe rides. Happy journeys.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(
+            Icons.verified_user_outlined,
+            color: AppTheme.brandOrange,
+            size: r(38),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _safetyCard(BuildContext context) {
+    final theme = Theme.of(context);
+    final r = context.rs;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      margin: EdgeInsets.fromLTRB(r(20), r(4), r(20), r(22)),
+      padding: EdgeInsets.all(r(18)),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(r(22)),
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF101A24), const Color(0xFF0B131C)]
+              : [const Color(0xFFFFF7EF), Colors.white],
+        ),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : AppTheme.brandOrange.withValues(alpha: 0.12),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: r(58),
+            height: r(58),
+            decoration: BoxDecoration(
+              color: AppTheme.brandOrange.withValues(
+                alpha: isDark ? 0.16 : 0.10,
+              ),
+              borderRadius: BorderRadius.circular(r(18)),
+            ),
+            child: Icon(
+              Icons.shield_rounded,
+              color: AppTheme.brandOrange,
+              size: r(32),
+            ),
+          ),
+          SizedBox(width: r(16)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your safety is our priority',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                SizedBox(height: r(6)),
+                Text(
+                  'All drivers are verified and background checked.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.64),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -762,33 +1351,30 @@ class _DriversScreenState extends State<DriversScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bg = theme.scaffoldBackgroundColor;
+    final isDark = theme.brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF06101A) : const Color(0xFFFFFCF8);
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Drivers',
-              style: theme.textTheme.headlineMedium?.copyWith(
-                color: Colors.black,
-              ),
-            ),
-            SizedBox(width: context.rs(8)),
-            Icon(
-              Icons.directions_car_outlined,
-              color: Colors.black,
-              size: context.rs(22),
-            ),
-          ],
+      body: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: isDark
+                ? [const Color(0xFF071523), const Color(0xFF02070C)]
+                : [const Color(0xFFFFFCF8), const Color(0xFFFFF7EF)],
+          ),
         ),
-        backgroundColor: bg,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _driversHero(context),
+              Expanded(child: _buildBody(context)),
+            ],
+          ),
+        ),
       ),
-      body: _buildBody(context),
       floatingActionButton: !_adminLoaded || !_isAdminUser
           ? null
           : FloatingActionButton.extended(

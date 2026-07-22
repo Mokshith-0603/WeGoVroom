@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb;
 import 'package:provider/provider.dart';
 import '../../../providers/auth_provider.dart';
+import '../../../services/trip_link_service.dart';
+import '../../../theme/app_theme.dart';
 
 class CreateTripScreen extends StatefulWidget {
   const CreateTripScreen({super.key});
@@ -191,7 +193,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
       );
 
       /// ⭐ CREATE TRIP
-      final tripRef = await db.collection("trips").add({
+      final tripData = <String, dynamic>{
         "ownerId": user.uid,
         "ownerName": name,
         "ownerAvatar": avatar,
@@ -209,7 +211,8 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
             : _selectedInviteeEmails.toList(),
         "dateTime": dateTime,
         "createdAt": FieldValue.serverTimestamp(),
-      });
+      };
+      final tripRef = await db.collection("trips").add(tripData);
 
       /// ⭐ HOST PARTICIPANT SNAPSHOT
       await db.collection("tripParticipants").doc("${tripRef.id}_${user.uid}").set({
@@ -223,6 +226,12 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
 
       if (!mounted) return;
       Navigator.pop(context);
+      try {
+        await TripLinkService.instance.shareTrip(
+          tripId: tripRef.id,
+          trip: tripData,
+        );
+      } catch (_) {}
       return;
     } catch (e) {
       debugPrint(e.toString());
@@ -325,20 +334,39 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   }
 
   Widget section(String title, IconData icon, Widget child) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black12)],
+        color: isDark ? const Color(0xFF111B25) : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            blurRadius: 18,
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.06),
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: const Color(0xffff7a00)),
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppTheme.brandOrange.withValues(alpha: 0.11),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(icon, color: AppTheme.brandOrange),
+              ),
               const SizedBox(width: 8),
               Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
             ],
@@ -354,6 +382,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
   Widget build(BuildContext context) {
     final isOther = selectedDestination == "Other";
     final user = fb.FirebaseAuth.instance.currentUser;
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -362,15 +391,42 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
           children: const [
             Text("Create Trip"),
             SizedBox(width: 8),
-            Icon(Icons.add_road, color: Color(0xffff7a00), size: 20),
+            Icon(Icons.luggage_rounded, color: AppTheme.brandOrange, size: 22),
           ],
         ),
       ),
-      backgroundColor: const Color(0xfff7f7f7),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            Container(
+              height: 150,
+              margin: const EdgeInsets.only(bottom: 18),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: theme.brightness == Brightness.dark
+                      ? const [Color(0xFF101B25), Color(0xFF171323)]
+                      : const [Color(0xFFFFF1E4), Color(0xFFFFFBF7)],
+                ),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.landscape_rounded,
+                    size: 120,
+                    color: AppTheme.brandOrange.withValues(alpha: 0.16),
+                  ),
+                  const Icon(
+                    Icons.directions_car_filled_rounded,
+                    size: 62,
+                    color: AppTheme.brandOrange,
+                  ),
+                ],
+              ),
+            ),
             section(
               "Route",
               Icons.place_outlined,
@@ -421,7 +477,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                     child: Text(
                       "(Departure date & time)",
                       style: TextStyle(
-                        color: Colors.grey[700],
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.62),
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -517,9 +573,10 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
               height: 56,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xffff7a00),
+                  backgroundColor: AppTheme.brandOrange,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(22),
                   ),
                 ),
                 onPressed: loading ? null : createTrip,
@@ -532,19 +589,19 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.rocket_launch, color: Color(0xff1a1a1a)),
+                    : const Icon(Icons.send_rounded, color: Colors.white),
                 label: loading
                     ? const Text(
                         "Creating Trip...",
                         style: TextStyle(
-                          color: Color(0xff1a1a1a),
+                          color: Colors.white,
                           fontWeight: FontWeight.w700,
                         ),
                       )
                     : const Text(
                         "Create Trip",
                         style: TextStyle(
-                          color: Color(0xff1a1a1a),
+                          color: Colors.white,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
