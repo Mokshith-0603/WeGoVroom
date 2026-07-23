@@ -195,6 +195,11 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if signedIn();
       allow create, update, delete: if signedIn() && uid() == userId;
+
+      match /tripMergeRequests/{requestId} {
+        allow read: if signedIn() && uid() == userId;
+        allow create, update, delete: if false;
+      }
     }
 
     match /trips/{tripId} {
@@ -322,6 +327,32 @@ service cloud.firestore {
         && request.resource.data.decidedBy == uid();
 
       allow delete: if false;
+    }
+
+    match /tripMergeRequests/{requestId} {
+      allow read: if signedIn()
+        && resource.data.hostIds is list
+        && uid() in resource.data.hostIds;
+      allow create, update, delete: if false;
+
+      match /acceptances/{hostId} {
+        allow read: if signedIn()
+          && get(/databases/$(database)/documents/tripMergeRequests/$(requestId))
+            .data.hostIds is list
+          && uid() in get(/databases/$(database)/documents/tripMergeRequests/$(requestId))
+            .data.hostIds;
+        allow create: if signedIn()
+          && hostId == uid()
+          && get(/databases/$(database)/documents/tripMergeRequests/$(requestId))
+            .data.status == "pending"
+          && get(/databases/$(database)/documents/tripMergeRequests/$(requestId))
+            .data.hostIds is list
+          && uid() in get(/databases/$(database)/documents/tripMergeRequests/$(requestId))
+            .data.hostIds
+          && request.resource.data.keys().hasOnly(["accepted", "createdAt"])
+          && request.resource.data.accepted is bool;
+        allow update, delete: if false;
+      }
     }
 
     match /tripMessages/{message} {
