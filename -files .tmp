@@ -1,0 +1,35 @@
+* [33m34a2ea6[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mnew[m[33m)[m App stoped working so fixed this issue
+*   [33m2914533[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m Merge pull request #29 from Mokshith-0603/new
+[32m|[m[33m\[m  
+[32m|[m * [33mcb5b64a[m[33m ([m[1;31morigin/new[m[33m)[m Done work on push notification
+* [33m|[m [33m8276345[m Merge pull request #28 from Mokshith-0603/new
+[34m|[m[33m\[m[33m|[m 
+[34m|[m * [33m8825d9f[m Done Google Authentication
+[34m|[m * [33m00367ca[m updated code
+* [35m|[m [33meec8ef7[m Merge pull request #27 from Mokshith-0603/new
+[36m|[m[35m\[m[35m|[m 
+[36m|[m * [33m98eea7c[m Done response time and done some changes
+[36m|[m[36m/[m  
+*   [33m2a6b864[m Merge pull request #26 from Mokshith-0603/deploy
+[1;32m|[m[1;33m\[m  
+[1;32m|[m * [33mb9a7c71[m Response time
+[1;32m|[m[1;32m/[m  
+*   [33m8f7ebb2[m Merge pull request #25 from Mokshith-0603/new
+[1;34m|[m[1;35m\[m  
+[1;34m|[m * [33mb639749[m Done changes
+[1;34m|[m[1;34m/[m  
+*   [33mdfcb5ec[m Merge pull request #24 from Mokshith-0603/restore
+[1;36m|[m[31m\[m  
+[1;36m|[m * [33m9c00920[m[33m ([m[1;31morigin/restore[m[33m)[m Fix bugs of chat and review
+[1;36m|[m[1;36m/[m  
+*   [33m536195d[m Merge branch 'features'
+[32m|[m[33m\[m  
+[32m|[m * [33mfc6ab5a[m[33m ([m[1;31morigin/features[m[33m)[m Notification pop up
+* [33m|[m [33m3a6aaa8[m Merge pull request #23 from Mokshith-0603/features
+[34m|[m[33m\[m[33m|[m 
+[34m|[m * [33medf99dd[m fix trip link
+[34m|[m[34m/[m  
+*   [33m222016c[m Merge pull request #22 from Mokshith-0603/dev
+[36m|[m[1;31m\[m  
+[36m|[m * [33m37b7115[m[33m ([m[1;31morigin/dev[m[33m, [m[1;32mdev[m[33m)[m Done ui changes and some features
+[36m|[m[36m/[m  

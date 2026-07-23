@@ -10,6 +10,7 @@ import '../../../utils/responsive.dart';
 import '../../../utils/transport_icons.dart';
 import 'manage_requests_screen.dart';
 import 'trip_detail_screen.dart';
+import 'trip_merge_requests_screen.dart';
 
 class MyTripsScreen extends StatelessWidget {
   const MyTripsScreen({super.key});
@@ -38,14 +39,51 @@ class MyTripsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _MergeRequestPromptListener(uid: uid),
                 Padding(
                   padding: EdgeInsets.fromLTRB(r(22), r(18), r(22), r(14)),
-                  child: Text(
-                    "My Trips",
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      fontSize: r(32),
-                      letterSpacing: -1.1,
-                    ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          "My Trips",
+                          style: theme.textTheme.headlineMedium?.copyWith(
+                            fontSize: r(32),
+                            letterSpacing: -1.1,
+                          ),
+                        ),
+                      ),
+                      StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance
+                            .collection("users")
+                            .doc(uid)
+                            .collection("tripMergeRequests")
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          final pending = snapshot.data?.docs.where((doc) {
+                                final data =
+                                    doc.data() as Map<String, dynamic>;
+                                return data["status"] == "pending";
+                              }).length ??
+                              0;
+                          return Badge(
+                            isLabelVisible: pending > 0,
+                            label: Text("$pending"),
+                            child: IconButton(
+                              tooltip: "Trip merge requests",
+                              icon: const Icon(Icons.merge_rounded),
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const TripMergeRequestsScreen(),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
                 Padding(
@@ -738,3 +776,113 @@ class MyTripsScreen extends StatelessWidget {
 }
 
 enum _TripStatus { completed, upcoming, cancelled }
+
+class _MergeRequestPromptListener extends StatefulWidget {
+  const _MergeRequestPromptListener({required this.uid});
+
+  final String uid;
+
+  @override
+  State<_MergeRequestPromptListener> createState() =>
+      _MergeRequestPromptListenerState();
+}
+
+class _MergeRequestPromptListenerState
+    extends State<_MergeRequestPromptListener> {
+  final Set<String> _shownRequestIds = {};
+  bool _dialogOpen = false;
+
+  Future<void> _respond(String requestId, bool accepted) async {
+    await FirebaseFirestore.instance
+        .collection("tripMergeRequests")
+        .doc(requestId)
+        .collection("acceptances")
+        .doc(widget.uid)
+        .set({
+          "accepted": accepted,
+          "createdAt": FieldValue.serverTimestamp(),
+        });
+  }
+
+  void _showNextRequest(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> requests,
+  ) {
+    if (_dialogOpen) return;
+    final pending = requests.where((doc) {
+      return doc.data()["status"] == "pending" &&
+          !_shownRequestIds.contains(doc.id);
+    }).toList();
+    if (pending.isEmpty) return;
+
+    final request = pending.first;
+    _shownRequestIds.add(request.id);
+    _dialogOpen = true;
+    final data = request.data();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final accepted = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text("Merge matching trips?"),
+          content: Text(
+            "Another host has a trip to ${data["destination"] ?? "the same destination"} "
+            "at the same time. Merge the trips if both hosts accept?",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text("Reject"),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text("Accept"),
+            ),
+          ],
+        ),
+      );
+
+      if (accepted != null) {
+        try {
+          await _respond(request.id, accepted);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  accepted
+                      ? "Accepted. Waiting for the other host."
+                      : "Rejected. Both trips will remain unchanged.",
+                ),
+              ),
+            );
+          }
+        } catch (_) {
+          _shownRequestIds.remove(request.id);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Could not save your response.")),
+            );
+          }
+        }
+      }
+      _dialogOpen = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection("users")
+          .doc(widget.uid)
+          .collection("tripMergeRequests")
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          _showNextRequest(snapshot.data!.docs);
+        }
+        return const SizedBox.shrink();
+      },
+    );
+  }
+}
