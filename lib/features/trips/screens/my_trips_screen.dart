@@ -17,10 +17,23 @@ class MyTripsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final user = FirebaseAuth.instance.currentUser;
     final theme = Theme.of(context);
     final r = context.rs;
     final isDark = theme.brightness == Brightness.dark;
+
+    if (user == null) {
+      return Scaffold(
+        body: Center(
+          child: Text(
+            "Please sign in to view your trips.",
+            style: theme.textTheme.titleMedium,
+          ),
+        ),
+      );
+    }
+
+    final uid = user.uid;
 
     return DefaultTabController(
       length: 5,
@@ -44,6 +57,12 @@ class MyTripsScreen extends StatelessWidget {
                   padding: EdgeInsets.fromLTRB(r(22), r(18), r(22), r(14)),
                   child: Row(
                     children: [
+                      Icon(
+                        Icons.route_rounded,
+                        color: AppTheme.brandOrange,
+                        size: r(28),
+                      ),
+                      SizedBox(width: r(8)),
                       Expanded(
                         child: Text(
                           "My Trips",
@@ -69,9 +88,9 @@ class MyTripsScreen extends StatelessWidget {
                           return Badge(
                             isLabelVisible: pending > 0,
                             label: Text("$pending"),
-                            child: IconButton(
-                              tooltip: "Trip merge requests",
-                              icon: const Icon(Icons.merge_rounded),
+                            child: TextButton.icon(
+                              icon: Icon(Icons.merge_rounded, size: r(19)),
+                              label: const Text("Merge trips"),
                               onPressed: () => Navigator.push(
                                 context,
                                 MaterialPageRoute(

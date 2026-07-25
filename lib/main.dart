@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
 import 'features/splash/screens/startup_splash_screen.dart';
@@ -18,12 +19,16 @@ void main() async {
 
   await PushNotificationService.instance.initialize();
 
+  final preferences = await SharedPreferences.getInstance();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => UserProfileProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeModeProvider()),
+        ChangeNotifierProvider(
+          create: (_) => ThemeModeProvider(preferences),
+        ),
       ],
       child: const WeGoVroomApp(),
     ),
