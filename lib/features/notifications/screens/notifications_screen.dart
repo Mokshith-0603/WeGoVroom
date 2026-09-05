@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../../providers/user_profile_provider.dart';
 import '../../../theme/app_theme.dart';
+import '../widgets/notification_indicator_icon.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -110,50 +111,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Icon(
-                          Icons.notifications_none_rounded,
-                          color: theme.colorScheme.onSurface,
-                          size: 26,
-                        ),
-                        Positioned(
-                          right: -1,
-                          top: 1,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: _accent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      ],
+                    NotificationIndicatorIcon(
+                      icon: Icons.notifications_none_rounded,
+                      iconColor: theme.colorScheme.onSurface,
+                      size: 26,
                     ),
                     const Spacer(),
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        IconButton(
-                          onPressed: () {},
-                          icon: const Icon(Icons.filter_alt_outlined),
-                        ),
-                        Positioned(
-                          right: 10,
-                          top: 9,
-                          child: Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: _accent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),

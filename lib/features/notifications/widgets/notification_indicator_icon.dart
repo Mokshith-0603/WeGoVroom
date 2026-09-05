@@ -25,7 +25,6 @@ class NotificationIndicatorIcon extends StatelessWidget {
       stream: FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: user.uid)
-          .limit(50)
           .snapshots(),
       builder: (context, snapshot) {
         final docs = snapshot.data?.docs ?? const [];
