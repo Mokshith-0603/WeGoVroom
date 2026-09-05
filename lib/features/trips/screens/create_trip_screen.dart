@@ -203,6 +203,7 @@ class _CreateTripScreenState extends State<CreateTripScreen> {
         "cost": parsedCost,
         "maxPeople": maxPeople,
         "joined": 1,
+        "completed": false,
         "description": descController.text.trim(),
         "isPublic": isPublic,
         "invitedUserIds": isPublic ? <String>[] : _selectedInviteeIds.toList(),
