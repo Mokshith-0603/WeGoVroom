@@ -561,10 +561,13 @@ class _HomeScreenState extends State<HomeScreen> {
           return _emptyTrips(context, "No trips match your search");
         }
 
-        final first = filtered.first;
-        return TripCard(
-          tripId: first.id,
-          data: first.data() as Map<String, dynamic>,
+        return Column(
+          children: filtered.map((doc) {
+            return TripCard(
+              tripId: doc.id,
+              data: doc.data() as Map<String, dynamic>,
+            );
+          }).toList(),
         );
       },
     );

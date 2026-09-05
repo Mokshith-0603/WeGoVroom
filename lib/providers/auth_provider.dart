@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -10,19 +11,39 @@ class AuthProvider extends ChangeNotifier {
   static const String _googleServerClientId =
       "202225012572-p5hn6o4kqcb0o4l3ikvtbajgqip9eghq.apps.googleusercontent.com";
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  StreamSubscription<User?>? _authSubscription;
+  bool _authReady = false;
   final GoogleSignIn _googleSignIn = kIsWeb
-      ? GoogleSignIn(
-          clientId: _googleWebClientId,
-        )
-      : GoogleSignIn(
-          serverClientId: _googleServerClientId,
-        );
+      ? GoogleSignIn(clientId: _googleWebClientId)
+      : GoogleSignIn(serverClientId: _googleServerClientId);
   static const String adminEmail = "admin@vitapstudent.ac.in";
   static const String allowedEmailDomain = "@vitapstudent.ac.in";
+  static const List<String> allowedEmailDomains = [
+    "@vitapstudent.ac.in",
+    "@vitap.ac.in",
+  ];
+  static const String allowedEmailDomainsLabel =
+      "@vitapstudent.ac.in or @vitap.ac.in";
+
+  AuthProvider() {
+    _authSubscription = _auth.authStateChanges().listen(
+      (_) {
+        _authReady = true;
+        notifyListeners();
+      },
+      onError: (Object error) {
+        debugPrint('Firebase auth state restoration failed: $error');
+        _authReady = true;
+        notifyListeners();
+      },
+    );
+  }
 
   User? get user => _auth.currentUser;
 
   bool get isLoggedIn => user != null;
+
+  bool get isAuthReady => _authReady || user != null;
 
   bool isAdminEmail(String? email) {
     return email?.trim().toLowerCase() == adminEmail;
@@ -33,7 +54,7 @@ class AuthProvider extends ChangeNotifier {
   /// Allow college domains
   bool _isCollegeEmail(String email) {
     final e = email.trim().toLowerCase();
-    return e.endsWith(allowedEmailDomain);
+    return allowedEmailDomains.any(e.endsWith);
   }
 
   Future<String?> signIn(String email, String password) async {
@@ -42,7 +63,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       if (!_isCollegeEmail(normalizedEmail)) {
-        return "Use $allowedEmailDomain email only";
+        return "Use $allowedEmailDomainsLabel email only";
       }
 
       final cred = await _auth.signInWithEmailAndPassword(
@@ -96,7 +117,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       if (!_isCollegeEmail(normalizedEmail)) {
-        return "Use $allowedEmailDomain email only";
+        return "Use $allowedEmailDomainsLabel email only";
       }
 
       final cred = await _auth.createUserWithEmailAndPassword(
@@ -141,7 +162,7 @@ class AuthProvider extends ChangeNotifier {
       final email = googleUser.email.trim().toLowerCase();
       if (!_isCollegeEmail(email)) {
         await _googleSignIn.signOut();
-        return "Use $allowedEmailDomain Google account only";
+        return "Use $allowedEmailDomainsLabel Google account only";
       }
 
       final googleAuth = await googleUser.authentication;
@@ -157,13 +178,15 @@ class AuthProvider extends ChangeNotifier {
       if (signedInEmail == null || !_isCollegeEmail(signedInEmail)) {
         await _auth.signOut();
         await _googleSignIn.signOut();
-        return "Use $allowedEmailDomain Google account only";
+        return "Use $allowedEmailDomainsLabel Google account only";
       }
 
       notifyListeners();
       return null;
     } on FirebaseAuthException catch (e) {
-      debugPrint('Google FirebaseAuthException: code=${e.code}, message=${e.message}');
+      debugPrint(
+        'Google FirebaseAuthException: code=${e.code}, message=${e.message}',
+      );
       switch (e.code) {
         case "account-exists-with-different-credential":
           return "An account already exists with a different sign-in method";
@@ -175,7 +198,9 @@ class AuthProvider extends ChangeNotifier {
           return e.message ?? "Google sign-in failed";
       }
     } on PlatformException catch (e) {
-      debugPrint('Google PlatformException: code=${e.code}, message=${e.message}, details=${e.details}');
+      debugPrint(
+        'Google PlatformException: code=${e.code}, message=${e.message}, details=${e.details}',
+      );
       if (e.code == "sign_in_canceled") {
         return "Google sign-in cancelled";
       }
@@ -190,7 +215,7 @@ class AuthProvider extends ChangeNotifier {
     final normalizedEmail = email.trim().toLowerCase();
     if (normalizedEmail.isEmpty) return "Enter your email";
     if (!_isCollegeEmail(normalizedEmail)) {
-      return "Use $allowedEmailDomain email only";
+      return "Use $allowedEmailDomainsLabel email only";
     }
 
     try {
@@ -272,5 +297,11 @@ class AuthProvider extends ChangeNotifier {
     await _googleSignIn.signOut();
     await _auth.signOut();
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 }

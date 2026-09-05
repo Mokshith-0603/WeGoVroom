@@ -32,13 +32,19 @@ class _ChatScreenState extends State<ChatScreen> {
   String _myName = 'User';
   int _myAvatar = 0;
 
+  Future<String?> _resolveTripWithTimeout({String? excludeTripId}) {
+    return _resolveFallbackTripId(
+      excludeTripId: excludeTripId,
+    ).timeout(const Duration(seconds: 15));
+  }
+
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
     _effectiveTripId = widget.tripId;
     if (_effectiveTripId == null) {
-      _tripResolutionFuture = _resolveFallbackTripId();
+      _tripResolutionFuture = _resolveTripWithTimeout();
     }
   }
 
@@ -55,7 +61,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _queueTripResolution({String? excludeTripId}) {
-    _tripResolutionFuture = _resolveFallbackTripId(
+    _tripResolutionFuture = _resolveTripWithTimeout(
       excludeTripId: excludeTripId,
     );
   }
@@ -233,6 +239,43 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  Widget _chatError(String message, VoidCallback onRetry) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      body: _chatBackground(
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.cloud_off_rounded,
+                    size: 48,
+                    color: theme.colorScheme.error,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _chatBackground({required Widget child}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return DecoratedBox(
@@ -315,10 +358,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
           SizedBox(width: r(8)),
         ],
-        IconButton(
-          onPressed: () {},
-          icon: const Icon(Icons.more_vert_rounded),
-        ),
+        IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert_rounded)),
       ],
     );
   }
@@ -335,7 +375,9 @@ class _ChatScreenState extends State<ChatScreen> {
           Positioned.fill(
             child: Icon(
               Icons.send_rounded,
-              color: AppTheme.brandOrange.withValues(alpha: isDark ? 0.22 : 0.16),
+              color: AppTheme.brandOrange.withValues(
+                alpha: isDark ? 0.22 : 0.16,
+              ),
               size: r(96),
             ),
           ),
@@ -344,7 +386,9 @@ class _ChatScreenState extends State<ChatScreen> {
             height: r(132),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppTheme.brandOrange.withValues(alpha: isDark ? 0.10 : 0.07),
+              color: AppTheme.brandOrange.withValues(
+                alpha: isDark ? 0.10 : 0.07,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: AppTheme.brandOrange.withValues(alpha: 0.12),
@@ -358,10 +402,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 height: r(64),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [
-                      AppTheme.brandOrange,
-                      AppTheme.brandOrangeLight,
-                    ],
+                    colors: [AppTheme.brandOrange, AppTheme.brandOrangeLight],
                   ),
                   borderRadius: BorderRadius.circular(r(20)),
                 ),
@@ -495,7 +536,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     Icon(
                       Icons.calendar_today_rounded,
                       size: r(13),
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.58),
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.58,
+                      ),
                     ),
                     SizedBox(width: r(5)),
                     Text(time, style: theme.textTheme.bodySmall),
@@ -893,8 +936,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (_effectiveTripId == null) {
       return FutureBuilder<String?>(
-        future: _tripResolutionFuture ??= _resolveFallbackTripId(),
+        future: _tripResolutionFuture ??= _resolveTripWithTimeout(),
         builder: (context, snap) {
+          if (snap.hasError) {
+            debugPrint('Unable to resolve chat trip: ${snap.error}');
+            return _chatError('Unable to load your trip chat.', () {
+              setState(() {
+                _tripResolutionFuture = _resolveTripWithTimeout();
+              });
+            });
+          }
           if (snap.connectionState == ConnectionState.waiting) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
@@ -918,6 +969,15 @@ class _ChatScreenState extends State<ChatScreen> {
     return StreamBuilder<DocumentSnapshot>(
       stream: db.collection('trips').doc(_effectiveTripId).snapshots(),
       builder: (context, tripSnap) {
+        if (tripSnap.hasError) {
+          debugPrint('Unable to load chat trip: ${tripSnap.error}');
+          return _chatError('Unable to load the trip for this chat.', () {
+            setState(() {
+              _effectiveTripId = null;
+              _queueTripResolution();
+            });
+          });
+        }
         if (tripSnap.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
@@ -929,10 +989,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
         if (!isActiveTrip) {
           return FutureBuilder<String?>(
-            future: _tripResolutionFuture ??= _resolveFallbackTripId(
+            future: _tripResolutionFuture ??= _resolveTripWithTimeout(
               excludeTripId: _effectiveTripId,
             ),
             builder: (context, nextSnap) {
+              if (nextSnap.hasError) {
+                debugPrint('Unable to resolve another chat: ${nextSnap.error}');
+                return _chatError('Unable to find an active trip chat.', () {
+                  setState(() {
+                    _queueTripResolution(excludeTripId: _effectiveTripId);
+                  });
+                });
+              }
               if (nextSnap.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
@@ -966,6 +1034,14 @@ class _ChatScreenState extends State<ChatScreen> {
               .where('tripId', isEqualTo: _effectiveTripId)
               .snapshots(),
           builder: (context, participantSnap) {
+            if (participantSnap.hasError) {
+              debugPrint(
+                'Unable to load chat participants: ${participantSnap.error}',
+              );
+              return _chatError('Unable to load the chat participants.', () {
+                setState(() {});
+              });
+            }
             if (participantSnap.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
@@ -1022,222 +1098,234 @@ class _ChatScreenState extends State<ChatScreen> {
                         child: _activeTripCard(context, tripData, docs.length),
                       ),
                       Expanded(
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            left: -80,
-                            top: 80,
-                            child: Container(
-                              width: 230,
-                              height: 230,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: secondary.withOpacity(0.08),
+                        child: Stack(
+                          children: [
+                            Positioned(
+                              left: -80,
+                              top: 80,
+                              child: Container(
+                                width: 230,
+                                height: 230,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: secondary.withOpacity(0.08),
+                                ),
                               ),
                             ),
-                          ),
-                          Positioned(
-                            right: -70,
-                            bottom: 120,
-                            child: Container(
-                              width: 200,
-                              height: 200,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.black.withOpacity(0.05),
+                            Positioned(
+                              right: -70,
+                              bottom: 120,
+                              child: Container(
+                                width: 200,
+                                height: 200,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.black.withOpacity(0.05),
+                                ),
                               ),
                             ),
-                          ),
-                          StreamBuilder<QuerySnapshot>(
-                            stream: db
-                                .collection('tripMessages')
-                                .where('tripId', isEqualTo: _effectiveTripId)
-                                .snapshots(),
-                            builder: (_, snap) {
-                              if (snap.connectionState ==
-                                  ConnectionState.waiting) {
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              }
+                            StreamBuilder<QuerySnapshot>(
+                              stream: db
+                                  .collection('tripMessages')
+                                  .where('tripId', isEqualTo: _effectiveTripId)
+                                  .snapshots(),
+                              builder: (_, snap) {
+                                if (snap.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(),
+                                  );
+                                }
 
-                              if (snap.hasError) {
-                                return Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(r(16)),
-                                    child: Text(
-                                      'Unable to load messages right now.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: Colors.grey[700],
-                                        fontSize: r(14),
+                                if (snap.hasError) {
+                                  debugPrint(
+                                    'Unable to load trip messages: ${snap.error}',
+                                  );
+                                  return Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(r(16)),
+                                      child: Text(
+                                        'Unable to load messages right now.',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.grey[700],
+                                          fontSize: r(14),
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              }
+                                  );
+                                }
 
-                              final rawDocs = snap.data?.docs ?? const [];
-                              if (rawDocs.isEmpty) {
-                                return Center(
-                                  child: Text(
-                                    'Start the conversation',
-                                    style: TextStyle(
-                                      color: Colors.grey[700],
-                                      fontSize: r(15),
+                                final rawDocs = snap.data?.docs ?? const [];
+                                if (rawDocs.isEmpty) {
+                                  return Center(
+                                    child: Text(
+                                      'Start the conversation',
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                        fontSize: r(15),
+                                      ),
                                     ),
-                                  ),
-                                );
-                              }
-
-                               final messageDocs = [...rawDocs];
-                               final profileProvider =
-                                   context.read<UserProfileProvider>();
-                               for (final doc in messageDocs) {
-                                 final data =
-                                     doc.data() as Map<String, dynamic>? ??
-                                     const <String, dynamic>{};
-                                 final senderId =
-                                     data['senderId']?.toString() ?? '';
-                                 if (senderId.isNotEmpty) {
-                                   profileProvider.listenToUserProfile(senderId);
-                                 }
-                               }
-                               messageDocs.sort((a, b) {
-                                final ad =
-                                    (a.data() as Map<String, dynamic>?) ??
-                                    const <String, dynamic>{};
-                                final bd =
-                                    (b.data() as Map<String, dynamic>?) ??
-                                    const <String, dynamic>{};
-                                final at = _messageTimestamp(ad)?.toDate();
-                                final bt = _messageTimestamp(bd)?.toDate();
-                                if (at == null && bt == null) {
-                                  return a.id.compareTo(b.id);
-                                }
-                                if (at == null) return 1;
-                                if (bt == null) return -1;
-                                final cmp = at.compareTo(bt);
-                                if (cmp != 0) return cmp;
-                                return a.id.compareTo(b.id);
-                              });
-
-                              // Scroll to last message after widget builds
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                if (_scrollController.hasClients) {
-                                  _scrollController.animateTo(
-                                    _scrollController.position.maxScrollExtent,
-                                    duration: const Duration(milliseconds: 300),
-                                    curve: Curves.easeOut,
                                   );
                                 }
-                              });
 
-                              return ListView.builder(
-                                controller: _scrollController,
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: r(16),
-                                  vertical: r(12),
-                                ),
-                                itemCount: messageDocs.length,
-                                itemBuilder: (_, i) {
+                                final messageDocs = [...rawDocs];
+                                final profileProvider = context
+                                    .read<UserProfileProvider>();
+                                for (final doc in messageDocs) {
                                   final data =
-                                      messageDocs[i].data()
-                                          as Map<String, dynamic>;
-                                  final mine = data['senderId'] == uid;
+                                      doc.data() as Map<String, dynamic>? ??
+                                      const <String, dynamic>{};
+                                  final senderId =
+                                      data['senderId']?.toString() ?? '';
+                                  if (senderId.isNotEmpty) {
+                                    profileProvider.listenToUserProfile(
+                                      senderId,
+                                    );
+                                  }
+                                }
+                                messageDocs.sort((a, b) {
+                                  final ad =
+                                      (a.data() as Map<String, dynamic>?) ??
+                                      const <String, dynamic>{};
+                                  final bd =
+                                      (b.data() as Map<String, dynamic>?) ??
+                                      const <String, dynamic>{};
+                                  final at = _messageTimestamp(ad)?.toDate();
+                                  final bt = _messageTimestamp(bd)?.toDate();
+                                  if (at == null && bt == null) {
+                                    return a.id.compareTo(b.id);
+                                  }
+                                  if (at == null) return 1;
+                                  if (bt == null) return -1;
+                                  final cmp = at.compareTo(bt);
+                                  if (cmp != 0) return cmp;
+                                  return a.id.compareTo(b.id);
+                                });
 
-                                  return _buildMessageItem(
-                                    data: data,
-                                    mine: mine,
-                                    secondary: secondary,
-                                  );
-                                },
-                              );
-                            },
-                          ),
-                        ],
+                                // Scroll to last message after widget builds
+                                WidgetsBinding.instance.addPostFrameCallback((
+                                  _,
+                                ) {
+                                  if (_scrollController.hasClients) {
+                                    _scrollController.animateTo(
+                                      _scrollController
+                                          .position
+                                          .maxScrollExtent,
+                                      duration: const Duration(
+                                        milliseconds: 300,
+                                      ),
+                                      curve: Curves.easeOut,
+                                    );
+                                  }
+                                });
+
+                                return ListView.builder(
+                                  controller: _scrollController,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: r(16),
+                                    vertical: r(12),
+                                  ),
+                                  itemCount: messageDocs.length,
+                                  itemBuilder: (_, i) {
+                                    final data =
+                                        messageDocs[i].data()
+                                            as Map<String, dynamic>;
+                                    final mine = data['senderId'] == uid;
+
+                                    return _buildMessageItem(
+                                      data: data,
+                                      mine: mine,
+                                      secondary: secondary,
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                       Padding(
                         padding: EdgeInsets.fromLTRB(r(14), r(8), r(14), r(14)),
                         child: Row(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: theme.brightness == Brightness.dark
-                                    ? const Color(0xFF101820)
-                                    : Colors.white,
-                                borderRadius: BorderRadius.circular(r(30)),
-                                border: Border.all(
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.08),
+                          children: [
+                            Expanded(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: theme.brightness == Brightness.dark
+                                      ? const Color(0xFF101820)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(r(30)),
+                                  border: Border.all(
+                                    color: theme.colorScheme.onSurface
+                                        .withValues(alpha: 0.08),
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                            ? 0.16
+                                            : 0.07,
+                                      ),
+                                      blurRadius: r(16),
+                                      offset: Offset(0, r(7)),
+                                    ),
+                                  ],
                                 ),
+                                child: TextField(
+                                  controller: controller,
+                                  enabled: canSend,
+                                  maxLines: null,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onSurface,
+                                  ),
+                                  textInputAction: TextInputAction.send,
+                                  onSubmitted: (_) => send(),
+                                  decoration: InputDecoration(
+                                    hintText: 'Send a message',
+                                    hintStyle: TextStyle(
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.52),
+                                      fontSize: r(14),
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: r(18),
+                                      vertical: r(12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            SizedBox(width: r(8)),
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    AppTheme.brandOrange,
+                                    AppTheme.brandOrangeLight,
+                                  ],
+                                ),
+                                shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withValues(
-                                      alpha: theme.brightness == Brightness.dark
-                                          ? 0.16
-                                          : 0.07,
-                                    ),
-                                    blurRadius: r(16),
-                                    offset: Offset(0, r(7)),
+                                    color: secondary.withOpacity(0.3),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
                                   ),
                                 ],
                               ),
-                              child: TextField(
-                                controller: controller,
-                                enabled: canSend,
-                                maxLines: null,
-                                style: TextStyle(
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                                textInputAction: TextInputAction.send,
-                                onSubmitted: (_) => send(),
-                                decoration: InputDecoration(
-                                  hintText: 'Send a message',
-                                  hintStyle: TextStyle(
-                                    color: theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.52),
-                                    fontSize: r(14),
-                                  ),
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: r(18),
-                                    vertical: r(12),
-                                  ),
+                              child: IconButton(
+                                onPressed: canSend ? send : null,
+                                icon: const Icon(
+                                  Icons.send_rounded,
+                                  color: Colors.white,
                                 ),
                               ),
                             ),
-                          ),
-                          SizedBox(width: r(8)),
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [
-                                  AppTheme.brandOrange,
-                                  AppTheme.brandOrangeLight,
-                                ],
-                              ),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: secondary.withOpacity(0.3),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: IconButton(
-                              onPressed: canSend ? send : null,
-                              icon: const Icon(
-                                Icons.send_rounded,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
                       ),
                     ],
                   ),

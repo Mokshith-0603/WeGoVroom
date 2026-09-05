@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,6 +19,14 @@ void main() async {
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  if (kIsWeb) {
+    try {
+      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+    } catch (e) {
+      debugPrint('Unable to enable persistent web sign-in: $e');
+    }
+  }
+
   await PushNotificationService.instance.initialize();
 
   final preferences = await SharedPreferences.getInstance();
@@ -26,9 +36,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => UserProfileProvider()),
-        ChangeNotifierProvider(
-          create: (_) => ThemeModeProvider(preferences),
-        ),
+        ChangeNotifierProvider(create: (_) => ThemeModeProvider(preferences)),
       ],
       child: const WeGoVroomApp(),
     ),
