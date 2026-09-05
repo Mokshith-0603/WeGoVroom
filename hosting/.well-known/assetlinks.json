@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.wegovroom.app",
+      "sha256_cert_fingerprints": [
+        "D9:23:6D:33:02:ED:33:43:D4:84:D8:18:73:06:4A:C0:1F:89:CA:F7:8C:1D:BE:A7:3A:48:58:1A:55:95:CA:79",
+        "C3:A3:DF:9E:D4:98:95:FC:F5:C6:9F:12:04:47:99:BD:2D:3E:23:43:7A:AC:37:85:48:F8:F7:D4:FC:41:29:57"
+      ]
+    }
+  }
+]
