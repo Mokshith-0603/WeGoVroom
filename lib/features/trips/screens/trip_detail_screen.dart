@@ -252,9 +252,19 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
+    final latestTripSnap = await db.collection("trips").doc(widget.tripId).get();
+    if (!mounted) return;
+    if (!latestTripSnap.exists) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Trip not found")),
+      );
+      return;
+    }
+    final currentTrip = latestTripSnap.data() ?? trip;
+
     DateTime? tripStart;
     try {
-      tripStart = (trip["dateTime"] as Timestamp?)?.toDate();
+      tripStart = (currentTrip["dateTime"] as Timestamp?)?.toDate();
     } catch (_) {}
     if (tripStart != null && !DateTime.now().isBefore(tripStart)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -263,7 +273,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       return;
     }
 
-    final isPublicTrip = trip["isPublic"] != false;
+    final isPublicTrip = currentTrip["isPublic"] != false;
     if (!isPublicTrip) {
       if (hasPendingRequest) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -312,8 +322,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
         final reqRef = await db.collection("tripRequests").add({
           "tripId": widget.tripId,
-          "hostId": trip["ownerId"],
-          "ownerId": trip["ownerId"],
+          "hostId": currentTrip["ownerId"],
+          "ownerId": currentTrip["ownerId"],
           "userId": user.uid,
           "name": name,
           "avatar": avatar,
@@ -324,7 +334,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
         try {
           await db.collection("notifications").add({
-            "userId": trip["ownerId"],
+            "userId": currentTrip["ownerId"],
             "message": "$name requested to join your trip",
             "type": "trip_request",
             "tripId": widget.tripId,
@@ -370,15 +380,14 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
       final userDoc = await db.collection("users").doc(user.uid).get();
       final u = userDoc.data() ?? {};
 
-      final name = u["displayName"] ?? u["name"] ?? "User";
-      final avatar = u["avatar"] ?? 0;
+      final name = (u["displayName"] ?? u["name"] ?? "User").toString();
+      final avatar = (u["avatar"] as num?)?.toInt() ?? 0;
 
       await db.runTransaction((tx) async {
-        final ref = db.collection("trips").doc(widget.tripId);
         final participantRef = db
             .collection("tripParticipants")
             .doc("${widget.tripId}_${user.uid}");
-        final snap = await tx.get(ref);
+        final snap = await tx.get(db.collection("trips").doc(widget.tripId));
         final participantSnap = await tx.get(participantRef);
 
         final data = snap.data()!;
@@ -395,10 +404,11 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         if (participantSnap.exists) {
           return;
         }
-        final joined = data["joined"] ?? 1;
-        final max = data["maxPeople"] ?? 4;
+        final joined = (data["joined"] as num?)?.toInt() ?? 1;
+        final max = (data["maxPeople"] as num?)?.toInt() ?? 4;
 
         if (joined >= max) throw Exception("Trip full");
+        tx.update(snap.reference, {"joined": joined + 1});
         tx.set(participantRef, {
           "tripId": widget.tripId,
           "userId": user.uid,
@@ -411,7 +421,7 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
       try {
         await db.collection("notifications").add({
-          "userId": trip["ownerId"],
+          "userId": currentTrip["ownerId"],
           "message": "$name joined your trip",
           "type": "trip_joined",
           "tripId": widget.tripId,
@@ -427,6 +437,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
         hasPendingRequest = false;
         pendingRequestId = null;
       });
+    } on FirebaseException catch (e) {
+      debugPrint(e.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Failed to join trip: $e")));
+      }
     } catch (e) {
       debugPrint(e.toString());
       if (mounted) {

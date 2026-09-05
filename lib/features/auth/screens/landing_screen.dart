@@ -226,10 +226,7 @@ class _LandingScreenState extends State<LandingScreen> {
                             tooltip: "Back",
                             padding: EdgeInsets.zero,
                             alignment: Alignment.centerLeft,
-                            icon: Icon(
-                              Icons.arrow_back_rounded,
-                              size: r(28),
-                            ),
+                            icon: Icon(Icons.arrow_back_rounded, size: r(28)),
                             onPressed: () {
                               Navigator.pushReplacement(
                                 context,
@@ -249,9 +246,7 @@ class _LandingScreenState extends State<LandingScreen> {
                               TextSpan(text: "Welcome to\nWeGo"),
                               TextSpan(
                                 text: "Vroom",
-                                style: TextStyle(
-                                  color: AppTheme.brandOrange,
-                                ),
+                                style: TextStyle(color: AppTheme.brandOrange),
                               ),
                             ],
                           ),
@@ -276,7 +271,7 @@ class _LandingScreenState extends State<LandingScreen> {
                         ),
                         SizedBox(height: r(7)),
                         Text(
-                          "Use only ${AuthProvider.allowedEmailDomain} email IDs",
+                          "Use only ${AuthProvider.allowedEmailDomainsLabel} email IDs",
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: r(13.5),
@@ -309,9 +304,7 @@ class _LandingScreenState extends State<LandingScreen> {
                               ),
                             ),
                             onPressed: () {
-                              setState(
-                                () => _showPassword = !_showPassword,
-                              );
+                              setState(() => _showPassword = !_showPassword);
                             },
                           ),
                         ),
@@ -352,8 +345,7 @@ class _LandingScreenState extends State<LandingScreen> {
                                 foregroundColor: AppTheme.brandOrange,
                                 padding: EdgeInsets.zero,
                                 minimumSize: Size.zero,
-                                tapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
                               child: Text(
                                 "Sign up",
@@ -415,10 +407,7 @@ class _LandingScreenState extends State<LandingScreen> {
                 height: r(92),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      AppTheme.brandOrange,
-                      AppTheme.brandOrangeLight,
-                    ],
+                    colors: [AppTheme.brandOrange, AppTheme.brandOrangeLight],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
@@ -448,10 +437,7 @@ class _LandingScreenState extends State<LandingScreen> {
               height: r(54),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [
-                    AppTheme.brandOrange,
-                    AppTheme.brandOrangeLight,
-                  ],
+                  colors: [AppTheme.brandOrange, AppTheme.brandOrangeLight],
                 ),
                 borderRadius: BorderRadius.circular(r(18)),
                 boxShadow: [
@@ -680,9 +666,7 @@ class _SignInHeroPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final skyline = Paint()
-      ..color = isDark
-          ? const Color(0xFF181B1D)
-          : const Color(0xFFFFEBDD);
+      ..color = isDark ? const Color(0xFF181B1D) : const Color(0xFFFFEBDD);
     final route = Paint()
       ..color = AppTheme.brandOrange.withValues(alpha: isDark ? 0.70 : 0.48)
       ..style = PaintingStyle.stroke
@@ -732,10 +716,7 @@ class _SignInHeroPainter extends CustomPainter {
       double distance = 0;
       while (distance < metric.length) {
         canvas.drawPath(
-          metric.extractPath(
-            distance,
-            (distance + 8).clamp(0, metric.length),
-          ),
+          metric.extractPath(distance, (distance + 8).clamp(0, metric.length)),
           route,
         );
         distance += 15;

@@ -2,7 +2,17 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null && hasAllowedEmailDomain();
+    }
+
+    function hasAllowedEmailDomain() {
+      let email = request.auth.token.get("email", "");
+      return request.auth != null
+        && email is string
+        && (
+          email.matches('^.+@vitapstudent[.]ac[.]in$')
+          || email.matches('^.+@vitap[.]ac[.]in$')
+        );
     }
 
     function uid() {
@@ -53,18 +63,20 @@ service cloud.firestore {
     function canSelfJoinTrip(tripId) {
       return signedIn()
         && tripExists(tripId)
-        && tripData(tripId).completed != true
+        && tripData(tripId).get("completed", false) != true
         && (
-          tripData(tripId).isPublic != false
+          tripData(tripId).get("isPublic", true) != false
           || tripOwnerId(tripId) == uid()
           || (
-            tripData(tripId).invitedUserIds is list
-            && tripData(tripId).invitedUserIds.hasAny([uid()])
+            tripData(tripId).get("invitedUserIds", []) is list
+            && tripData(tripId).get("invitedUserIds", []).hasAny([uid()])
           )
           || (
-            request.auth.token.email is string
-            && tripData(tripId).invitedUserEmails is list
-            && tripData(tripId).invitedUserEmails.hasAny([request.auth.token.email])
+            request.auth.token.get("email", "") is string
+            && tripData(tripId).get("invitedUserEmails", []) is list
+            && tripData(tripId).get("invitedUserEmails", []).hasAny([
+              request.auth.token.get("email", "")
+            ])
           )
         );
     }
@@ -237,20 +249,7 @@ service cloud.firestore {
         && (
           (
             request.resource.data.userId == uid()
-            && tripData(request.resource.data.tripId).completed != true
-            && (
-              tripData(request.resource.data.tripId).isPublic != false
-              || tripOwnerId(request.resource.data.tripId) == uid()
-              || (
-                tripData(request.resource.data.tripId).invitedUserIds is list
-                && tripData(request.resource.data.tripId).invitedUserIds.hasAny([uid()])
-              )
-              || (
-                request.auth.token.email is string
-                && tripData(request.resource.data.tripId).invitedUserEmails is list
-                && tripData(request.resource.data.tripId).invitedUserEmails.hasAny([request.auth.token.email])
-              )
-            )
+            && canSelfJoinTrip(request.resource.data.tripId)
           )
           || isTripOwner(request.resource.data.tripId)
         );
