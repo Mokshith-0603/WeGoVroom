@@ -13,6 +13,7 @@ import 'providers/theme_mode_provider.dart';
 import 'navigation/app_router.dart';
 import 'services/push_notification_service.dart';
 import 'theme/app_theme.dart';
+import 'widgets/app_update_prompt.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,7 +57,9 @@ class WeGoVroomApp extends StatelessWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
-      home: const StartupSplashScreen(child: AppRouter()),
+      home: const StartupSplashScreen(
+        child: AppUpdatePrompt(child: AppRouter()),
+      ),
     );
   }
 }

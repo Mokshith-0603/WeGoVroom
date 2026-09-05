@@ -48,6 +48,7 @@ dependencies:
   url_launcher: ^6.1.7
   app_links: ^6.4.0
   share_plus: ^10.1.4
+  in_app_update: ^4.2.5
 
 dev_dependencies:
   flutter_test:

@@ -14,14 +14,7 @@ class AppHomeScreen extends StatefulWidget {
 }
 
 class _AppHomeScreenState extends State<AppHomeScreen> {
-  final PageController _pageController = PageController();
-  int _pageIndex = 0;
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
+  bool _acceptedTerms = false;
 
   void _goToLogin(BuildContext context) {
     Navigator.push(
@@ -30,19 +23,48 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
     );
   }
 
-  Future<void> _goNextPage() async {
-    await _pageController.animateToPage(
-      1,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  Future<void> _goPreviousPage() async {
-    await _pageController.animateToPage(
-      0,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
+  void _openTerms(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (termsContext) {
+          final isDark = Theme.of(termsContext).brightness == Brightness.dark;
+          final r = termsContext.rs;
+          return Scaffold(
+            body: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isDark
+                      ? const [Color(0xFF0A0C0D), Color(0xFF111315)]
+                      : const [Color(0xFFFDFCFB), Color(0xFFF7F5F1)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: -r(120),
+                    right: -r(90),
+                    child: _ambientGlow(
+                      AppTheme.brandOrange.withValues(
+                        alpha: isDark ? 0.10 : 0.08,
+                      ),
+                      r(300),
+                    ),
+                  ),
+                  SafeArea(
+                    child: _guidelinesPage(
+                      termsContext,
+                      onBack: () => Navigator.pop(termsContext),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -72,52 +94,7 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
                 r(300),
               ),
             ),
-            SafeArea(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: PageView(
-                      controller: _pageController,
-                      onPageChanged: (i) => setState(() => _pageIndex = i),
-                      children: [
-                        _introPage(context),
-                        _guidelinesPage(context),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      r(20),
-                      r(8),
-                      r(20),
-                      r(14),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        2,
-                        (i) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 240),
-                          curve: Curves.easeOutCubic,
-                          margin: EdgeInsets.symmetric(horizontal: r(4)),
-                          width: _pageIndex == i ? r(22) : r(8),
-                          height: r(8),
-                          decoration: BoxDecoration(
-                            color: _pageIndex == i
-                                ? AppTheme.brandOrange
-                                : Theme.of(context)
-                                      .colorScheme
-                                      .onSurface
-                                      .withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(r(8)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            SafeArea(child: _introPage(context)),
           ],
         ),
       ),
@@ -141,9 +118,7 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
             SizedBox(height: r(26)),
             Text(
               "Why Use WeGoVroom?",
-              style: theme.textTheme.headlineMedium?.copyWith(
-                fontSize: r(24),
-              ),
+              style: theme.textTheme.headlineMedium?.copyWith(fontSize: r(24)),
             ),
             SizedBox(height: r(14)),
             _featureCard(
@@ -171,11 +146,42 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
               title: "Member Reviews",
               subtitle: "Rate travel companions after completed trips.",
             ),
-            SizedBox(height: r(10)),
+            SizedBox(height: r(8)),
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.fromLTRB(r(12), r(8), r(12), r(10)),
+              decoration: _surfaceDecoration(context, radius: r(20)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CheckboxListTile(
+                    value: _acceptedTerms,
+                    onChanged: (value) {
+                      setState(() => _acceptedTerms = value ?? false);
+                    },
+                    activeColor: AppTheme.brandOrange,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      "I agree to the Terms and Conditions",
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontSize: r(14),
+                      ),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => _openTerms(context),
+                    icon: const Icon(Icons.description_outlined),
+                    label: const Text("Read Terms and Conditions"),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(height: r(14)),
             _gradientButton(
               context: context,
-              label: "Next",
-              onTap: _goNextPage,
+              label: "Continue to Sign In",
+              onTap: _acceptedTerms ? () => _goToLogin(context) : null,
             ),
             SizedBox(height: r(6)),
           ],
@@ -401,7 +407,7 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
     );
   }
 
-  Widget _guidelinesPage(BuildContext context) {
+  Widget _guidelinesPage(BuildContext context, {required VoidCallback onBack}) {
     final theme = Theme.of(context);
     final r = context.rs;
     final isDark = theme.brightness == Brightness.dark;
@@ -473,7 +479,7 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
                   alignment: Alignment.centerLeft,
                   child: IconButton(
                     tooltip: "Back",
-                    onPressed: _goPreviousPage,
+                    onPressed: onBack,
                     icon: Icon(
                       Icons.arrow_back_rounded,
                       color: theme.colorScheme.onSurface,
@@ -548,7 +554,7 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
               ),
             ),
             Text(
-              "Community Guidelines",
+              "Terms and Conditions",
               textAlign: TextAlign.center,
               style: theme.textTheme.headlineMedium?.copyWith(
                 fontSize: r(27),
@@ -688,12 +694,6 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
                 ],
               ),
             ),
-            SizedBox(height: r(14)),
-            _gradientButton(
-              context: context,
-              label: "I Agree and Continue",
-              onTap: () => _goToLogin(context),
-            ),
             SizedBox(height: r(6)),
           ],
         ),
@@ -751,11 +751,7 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
     );
   }
 
-  Widget _iconTile(
-    BuildContext context,
-    IconData icon, {
-    double? size,
-  }) {
+  Widget _iconTile(BuildContext context, IconData icon, {double? size}) {
     final r = context.rs;
     final tileSize = size ?? r(52);
 
@@ -766,36 +762,37 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
         color: AppTheme.brandOrange.withValues(alpha: 0.10),
         borderRadius: BorderRadius.circular(r(17)),
       ),
-      child: Icon(
-        icon,
-        color: AppTheme.brandOrange,
-        size: r(25),
-      ),
+      child: Icon(icon, color: AppTheme.brandOrange, size: r(25)),
     );
   }
 
   Widget _gradientButton({
     required BuildContext context,
     required String label,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
   }) {
     final r = context.rs;
+    final enabled = onTap != null;
 
     return Container(
       width: double.infinity,
       height: r(58),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppTheme.brandOrange, AppTheme.brandOrangeLight],
+        gradient: LinearGradient(
+          colors: enabled
+              ? const [AppTheme.brandOrange, AppTheme.brandOrangeLight]
+              : const [Color(0xFFBDBDBD), Color(0xFF9E9E9E)],
         ),
         borderRadius: BorderRadius.circular(r(22)),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.brandOrange.withValues(alpha: 0.28),
-            blurRadius: r(20),
-            offset: Offset(0, r(9)),
-          ),
-        ],
+        boxShadow: enabled
+            ? [
+                BoxShadow(
+                  color: AppTheme.brandOrange.withValues(alpha: 0.28),
+                  blurRadius: r(20),
+                  offset: Offset(0, r(9)),
+                ),
+              ]
+            : const [],
       ),
       child: Material(
         color: Colors.transparent,
@@ -855,10 +852,7 @@ class _AppHomeScreenState extends State<AppHomeScreen> {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
 
@@ -885,9 +879,7 @@ class _CampusHeroPainter extends CustomPainter {
     final orange = Paint()
       ..color = AppTheme.brandOrange.withValues(alpha: isDark ? 0.14 : 0.10);
     final skyline = Paint()
-      ..color = isDark
-          ? const Color(0xFF1D2022)
-          : const Color(0xFFFFE8D6);
+      ..color = isDark ? const Color(0xFF1D2022) : const Color(0xFFFFE8D6);
     final road = Paint()
       ..color = AppTheme.brandOrange.withValues(alpha: isDark ? 0.75 : 0.55)
       ..style = PaintingStyle.stroke

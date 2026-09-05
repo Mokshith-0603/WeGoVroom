@@ -8,7 +8,7 @@ class TripLinkService {
 
   static final TripLinkService instance = TripLinkService._();
 
-  static const String host = 'wegovroom.app';
+  static const String host = 'wegovroom-e77c2.web.app';
   static const String androidPackageId = 'com.wegovroom.app';
 
   final AppLinks _appLinks = AppLinks();
@@ -16,10 +16,17 @@ class TripLinkService {
   Stream<Uri> get uriStream => _appLinks.uriLinkStream;
 
   Uri tripUri(String tripId) {
-    return Uri.https(host, '/', {'tripId': tripId});
+    return Uri(scheme: 'https', host: host, pathSegments: ['trip', tripId]);
   }
 
   String? tripIdFromUri(Uri uri) {
+    if (uri.scheme == 'wegovroom' && uri.host == 'trip') {
+      final customSchemeTripId = uri.pathSegments.firstOrNull?.trim();
+      if (customSchemeTripId != null && customSchemeTripId.isNotEmpty) {
+        return customSchemeTripId;
+      }
+    }
+
     final fromQuery = uri.queryParameters['tripId']?.trim();
     if (fromQuery != null && fromQuery.isNotEmpty) return fromQuery;
 
