@@ -206,7 +206,7 @@ class _MainNavigationState extends State<MainNavigation> {
             children: [
               const HomeScreen(),
               const MyTripsScreen(),
-              const DriversScreen(),
+              DriversScreen(onBack: () => setState(() => index = 0)),
               ChatScreen(tripId: tripId),
             ],
           ),

@@ -7,7 +7,9 @@ import '../../../utils/responsive.dart';
 import '../../../theme/app_theme.dart';
 
 class DriversScreen extends StatefulWidget {
-  const DriversScreen({super.key});
+  const DriversScreen({super.key, this.onBack});
+
+  final VoidCallback? onBack;
 
   @override
   State<DriversScreen> createState() => _DriversScreenState();
@@ -1062,7 +1064,7 @@ class _DriversScreenState extends State<DriversScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           IconButton(
-            onPressed: () => Navigator.maybePop(context),
+            onPressed: widget.onBack ?? () => Navigator.maybePop(context),
             icon: const Icon(Icons.arrow_back_rounded),
             padding: EdgeInsets.zero,
             alignment: Alignment.centerLeft,

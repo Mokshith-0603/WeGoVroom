@@ -163,39 +163,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       drawer: const ProfileDrawer(),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: Container(
-        width: r(66),
-        height: r(66),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppTheme.brandOrange,
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.brandOrange.withValues(alpha: 0.35),
-              blurRadius: r(24),
-              offset: Offset(0, r(10)),
-            ),
-          ],
-        ),
-        child: FloatingActionButton(
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          foregroundColor: Colors.white,
-          shape: const CircleBorder(),
-          onPressed: _isCheckingCreateTrip ? null : _onCreateTripPressed,
-          child: _isCheckingCreateTrip
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : Icon(Icons.add_rounded, size: r(34)),
-        ),
-      ),
       body: DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(

@@ -174,7 +174,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   ),
                   child: const Text("Review"),
                 )
-              : const Text("View"),
+              : TextButton(
+                  onPressed: () => _openUserReviewsBottomSheet(
+                    revieweeId: participantId,
+                    revieweeName: displayName,
+                  ),
+                  child: const Text("View"),
+                ),
         ],
       ),
     );
@@ -252,12 +258,15 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     final user = context.read<AuthProvider>().user;
     if (user == null) return;
 
-    final latestTripSnap = await db.collection("trips").doc(widget.tripId).get();
+    final latestTripSnap = await db
+        .collection("trips")
+        .doc(widget.tripId)
+        .get();
     if (!mounted) return;
     if (!latestTripSnap.exists) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Trip not found")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Trip not found")));
       return;
     }
     final currentTrip = latestTripSnap.data() ?? trip;
@@ -1054,31 +1063,50 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (_) {
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final isDark = theme.brightness == Brightness.dark;
+
         return SafeArea(
-          child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.72,
-            child: StreamBuilder<QuerySnapshot>(
+          top: false,
+          child: Container(
+            height: MediaQuery.sizeOf(sheetContext).height * 0.78,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF07131F) : const Color(0xFFFFFCF8),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(30),
+              ),
+              border: Border.all(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+              ),
+            ),
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: db
                   .collection("tripReviews")
                   .where("revieweeId", isEqualTo: revieweeId)
                   .snapshots(),
-              builder: (_, snap) {
-                final docs = List<QueryDocumentSnapshot>.from(
-                  snap.data?.docs ?? const [],
-                );
+              builder: (context, snap) {
+                if (snap.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: AppTheme.brandOrange,
+                    ),
+                  );
+                }
+                if (snap.hasError) {
+                  return _userReviewMessageState(
+                    context,
+                    icon: Icons.cloud_off_rounded,
+                    title: "Unable to load reviews",
+                    message: "Check your connection and try again.",
+                  );
+                }
+
+                final docs = snap.data?.docs.toList() ?? const [];
                 docs.sort((a, b) {
-                  final da =
-                      ((a.data() as Map<String, dynamic>)["createdAt"]
-                              as Timestamp?)
-                          ?.toDate();
-                  final dbb =
-                      ((b.data() as Map<String, dynamic>)["createdAt"]
-                              as Timestamp?)
-                          ?.toDate();
+                  final da = (a.data()["createdAt"] as Timestamp?)?.toDate();
+                  final dbb = (b.data()["createdAt"] as Timestamp?)?.toDate();
                   if (da == null && dbb == null) return 0;
                   if (da == null) return 1;
                   if (dbb == null) return -1;
@@ -1093,45 +1121,135 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                      child: Text(
-                        "$revieweeName Reviews",
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      padding: const EdgeInsets.fromLTRB(18, 12, 12, 12),
+                      child: Column(
+                        children: [
+                          Center(
+                            child: Container(
+                              width: 44,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.18,
+                                ),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          Row(
+                            children: [
+                              Container(
+                                width: 52,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      AppTheme.brandOrangeLight,
+                                      AppTheme.brandOrange,
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: const Icon(
+                                  Icons.reviews_rounded,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(width: 13),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      revieweeName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.titleLarge
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      "Traveller reviews",
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: theme.colorScheme.onSurface
+                                                .withValues(alpha: 0.6),
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => Navigator.pop(sheetContext),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        reviewCount == 0
-                            ? "No reviews yet"
-                            : "${avgRating.toStringAsFixed(1)}/5 from $reviewCount reviews",
-                        style: TextStyle(color: Colors.grey[700]),
+                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: AppTheme.brandOrange.withValues(alpha: 0.11),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(
+                              reviewCount == 0
+                                  ? "—"
+                                  : avgRating.toStringAsFixed(1),
+                              style: theme.textTheme.headlineMedium?.copyWith(
+                                color: AppTheme.brandOrange,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(width: 13),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _reviewStars(avgRating, size: 19),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    reviewCount == 0
+                                        ? "No reviews yet"
+                                        : "$reviewCount review${reviewCount == 1 ? '' : 's'} from completed trips",
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurface
+                                          .withValues(alpha: 0.64),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 10),
                     Expanded(
                       child: reviewCount == 0
-                          ? const Center(child: Text("No reviews yet"))
+                          ? _userReviewMessageState(
+                              context,
+                              icon: Icons.rate_review_outlined,
+                              title: "No reviews yet",
+                              message:
+                                  "Reviews from completed trips will appear here.",
+                            )
                           : ListView.builder(
+                              physics: const BouncingScrollPhysics(),
+                              padding: const EdgeInsets.fromLTRB(18, 0, 18, 22),
                               itemCount: docs.length,
                               itemBuilder: (_, i) {
-                                final review =
-                                    docs[i].data() as Map<String, dynamic>;
-                                final reviewer =
-                                    review["reviewerName"] ?? "User";
-                                final rating = review["rating"] ?? 0;
-                                final comment = (review["comment"] ?? "")
-                                    .toString();
-
-                                return ListTile(
-                                  title: Text("$reviewer - $rating/5"),
-                                  subtitle: comment.isEmpty
-                                      ? null
-                                      : Text(comment),
-                                );
+                                return _userReviewCard(context, docs[i].data());
                               },
                             ),
                     ),
@@ -1142,6 +1260,167 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _reviewStars(double rating, {double size = 17}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(5, (index) {
+        return Icon(
+          index < rating.round()
+              ? Icons.star_rounded
+              : Icons.star_border_rounded,
+          color: AppTheme.brandOrange,
+          size: size,
+        );
+      }),
+    );
+  }
+
+  Widget _userReviewCard(BuildContext context, Map<String, dynamic> review) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final reviewer = (review["reviewerName"] ?? "User").toString();
+    final rating = ((review["rating"] ?? 0) as num).toDouble();
+    final comment = (review["comment"] ?? "").toString().trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF101B25) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: AppTheme.brandOrange.withValues(alpha: 0.14),
+            child: Text(
+              reviewer.trim().isEmpty
+                  ? "U"
+                  : reviewer.trim().substring(0, 1).toUpperCase(),
+              style: const TextStyle(
+                color: AppTheme.brandOrange,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        reviewer,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppTheme.brandOrange.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            color: AppTheme.brandOrange,
+                            size: 15,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            rating.toStringAsFixed(1),
+                            style: const TextStyle(
+                              color: AppTheme.brandOrange,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                _reviewStars(rating),
+                if (comment.isNotEmpty) ...[
+                  const SizedBox(height: 9),
+                  Text(
+                    comment,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.72,
+                      ),
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _userReviewMessageState(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: AppTheme.brandOrange, size: 42),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1392,10 +1671,8 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                                 color: Color(0xFF25D366),
                               ),
                               tooltip: "Share on WhatsApp",
-                              onPressed: () => _shareTrip(
-                                d,
-                                whatsappOnly: true,
-                              ),
+                              onPressed: () =>
+                                  _shareTrip(d, whatsappOnly: true),
                             ),
                             if (isCreator && !tripEnded)
                               IconButton(
@@ -1462,104 +1739,119 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                         const SizedBox(height: 20),
                         _card(
                           child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            Expanded(child: _infoItem(Icons.calendar_today, dateText)),
-                            Expanded(child: _infoItem(Icons.schedule, timeText)),
-                          ]),
-                          const SizedBox(height: 14),
-                          Row(children: [
-                            Expanded(
-                              child: _infoItem(
-                                isPublicTrip ? Icons.public : Icons.lock_outline,
-                                isPublicTrip ? "Public trip" : "Private trip",
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _infoItem(
+                                      Icons.calendar_today,
+                                      dateText,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _infoItem(Icons.schedule, timeText),
+                                  ),
+                                ],
                               ),
-                            ),
-                            Expanded(
-                              child: _infoItem(
-                                Icons.currency_rupee,
-                                "${d["cost"]}/person",
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _infoItem(
+                                      isPublicTrip
+                                          ? Icons.public
+                                          : Icons.lock_outline,
+                                      isPublicTrip
+                                          ? "Public trip"
+                                          : "Private trip",
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _infoItem(
+                                      Icons.currency_rupee,
+                                      "${d["cost"]}/person",
+                                      color: Colors.green,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              _infoItem(
+                                Icons.groups_rounded,
+                                "$joined / $max joined",
                                 color: Colors.green,
                               ),
-                            ),
-                          ]),
-                          const SizedBox(height: 14),
-                          _infoItem(
-                            Icons.groups_rounded,
-                            "$joined / $max joined",
-                            color: Colors.green,
-                          ),
-                          const Divider(height: 28),
-                          _infoItem(
-                            Icons.location_on,
-                            (d["meetingPoint"] ?? "").toString(),
-                            subtitle: "Pickup point",
-                            color: Colors.redAccent,
-                          ),
-                          if ((d["description"] ?? "")
-                              .toString()
-                              .trim()
-                              .isNotEmpty) ...[
-                            const SizedBox(height: 10),
-                            Text(
-                              "Description",
-                              style: TextStyle(
-                                color: Colors.grey[700],
-                                fontWeight: FontWeight.w700,
+                              const Divider(height: 28),
+                              _infoItem(
+                                Icons.location_on,
+                                (d["meetingPoint"] ?? "").toString(),
+                                subtitle: "Pickup point",
+                                color: Colors.redAccent,
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text((d["description"] ?? "").toString()),
-                          ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    if (isCreator && !tripEnded)
-                      _disclaimerCard(
-                        context,
-                        "If you don't complete this trip manually, it will be completed automatically 12 hours after the selected trip time.",
-                      ),
-                    if (autoEnded && !completed) ...[
-                      const SizedBox(height: 18),
-                      _disclaimerCard(
-                        context,
-                        "This trip has reached 12 hours after the selected time and is treated as completed.",
-                      ),
-                    ],
-                    const SizedBox(height: 18),
-                    if (isCreator && !isPublicTrip && !tripEnded)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => ManageRequestsScreen(
-                                    tripId: widget.tripId,
+                              if ((d["description"] ?? "")
+                                  .toString()
+                                  .trim()
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Text(
+                                  "Description",
+                                  style: TextStyle(
+                                    color: Colors.grey[700],
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                              );
-                            },
-                            icon: const Icon(Icons.person_search),
-                            label: const Text("Manage Join Requests"),
+                                const SizedBox(height: 4),
+                                Text((d["description"] ?? "").toString()),
+                              ],
+                            ],
                           ),
                         ),
-                      ),
-                    _participantsSection(
-                      ownerId: d["ownerId"],
-                      allowReview: allowReview,
-                      currentUserId: user?.uid,
-                      ownerName: d["ownerName"] ?? "Host",
-                      allowHostRemove: isCreator && !tripEnded,
-                      tripData: d,
-                    ),
-                    const SizedBox(height: 18),
-                    _reviewsSection(),
+                        const SizedBox(height: 18),
+                        if (isCreator && !tripEnded)
+                          _disclaimerCard(
+                            context,
+                            "If you don't complete this trip manually, it will be completed automatically 12 hours after the selected trip time.",
+                          ),
+                        if (autoEnded && !completed) ...[
+                          const SizedBox(height: 18),
+                          _disclaimerCard(
+                            context,
+                            "This trip has reached 12 hours after the selected time and is treated as completed.",
+                          ),
+                        ],
+                        const SizedBox(height: 18),
+                        if (isCreator && !isPublicTrip && !tripEnded)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ManageRequestsScreen(
+                                        tripId: widget.tripId,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.person_search),
+                                label: const Text("Manage Join Requests"),
+                              ),
+                            ),
+                          ),
+                        _participantsSection(
+                          ownerId: d["ownerId"],
+                          allowReview: allowReview,
+                          currentUserId: user?.uid,
+                          ownerName: d["ownerName"] ?? "Host",
+                          allowHostRemove: isCreator && !tripEnded,
+                          tripData: d,
+                        ),
+                        const SizedBox(height: 18),
+                        _reviewsSection(),
                       ],
                     ),
                   ),
@@ -1572,7 +1864,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
               return Container(
                 padding: const EdgeInsets.fromLTRB(22, 10, 22, 22),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF0D1013) : const Color(0xFFFFFEFC),
+                  color: isDark
+                      ? const Color(0xFF0D1013)
+                      : const Color(0xFFFFFEFC),
                 ),
                 child: SizedBox(height: 58, child: child),
               );
@@ -1623,9 +1917,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                           foregroundColor: Colors.white,
                           shape: buttonShape,
                         ),
-                        onPressed: loading ? null : () => _openLeaveTripDialog(d),
+                        onPressed: loading
+                            ? null
+                            : () => _openLeaveTripDialog(d),
                         child: loading
-                            ? const CircularProgressIndicator(color: Colors.white)
+                            ? const CircularProgressIndicator(
+                                color: Colors.white,
+                              )
                             : const Text(
                                 "Leave Trip",
                                 style: TextStyle(fontWeight: FontWeight.bold),
@@ -1639,7 +1937,9 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                         ),
                         onPressed: canJoinAction ? () => handleJoin(d) : null,
                         child: loading
-                            ? const CircularProgressIndicator(color: Colors.white)
+                            ? const CircularProgressIndicator(
+                                color: Colors.white,
+                              )
                             : Text(
                                 joinWindowClosed
                                     ? "Join Closed"

@@ -8,6 +8,7 @@ import '../../../utils/responsive.dart';
 import '../../../theme/app_theme.dart';
 import '../../../providers/user_profile_provider.dart';
 import '../../profile/widgets/avatar_utils.dart';
+import '../../trips/screens/trip_detail_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final String? tripId;
@@ -27,6 +28,17 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _canChat = false;
   String? _effectiveTripId;
   Future<String?>? _tripResolutionFuture;
+  String? _streamTripId;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _tripStream;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _participantStream;
+  Stream<QuerySnapshot<Map<String, dynamic>>>? _messageStream;
+
+  Map<String, dynamic>? _lastTripData;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>>? _lastParticipantDocs;
+  List<QueryDocumentSnapshot<Map<String, dynamic>>>? _lastMessageDocs;
+  String? _lastRenderedMessageId;
+  int _lastRenderedMessageCount = 0;
+  bool _didInitialMessageScroll = false;
 
   bool _profileLoaded = false;
   String _myName = 'User';
@@ -43,6 +55,7 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _scrollController = ScrollController();
     _effectiveTripId = widget.tripId;
+    _configureTripStreams(_effectiveTripId);
     if (_effectiveTripId == null) {
       _tripResolutionFuture = _resolveTripWithTimeout();
     }
@@ -54,10 +67,47 @@ class _ChatScreenState extends State<ChatScreen> {
     if (widget.tripId != null && widget.tripId != oldWidget.tripId) {
       _effectiveTripId = widget.tripId;
       _tripResolutionFuture = null;
+      _configureTripStreams(_effectiveTripId);
     } else if (widget.tripId == null && oldWidget.tripId != null) {
       _effectiveTripId = null;
+      _configureTripStreams(null);
       _queueTripResolution();
     }
+  }
+
+  void _configureTripStreams(String? tripId) {
+    if (_streamTripId == tripId &&
+        (tripId == null ||
+            (_tripStream != null &&
+                _participantStream != null &&
+                _messageStream != null))) {
+      return;
+    }
+
+    _streamTripId = tripId;
+    _lastTripData = null;
+    _lastParticipantDocs = null;
+    _lastMessageDocs = null;
+    _lastRenderedMessageId = null;
+    _lastRenderedMessageCount = 0;
+    _didInitialMessageScroll = false;
+
+    if (tripId == null) {
+      _tripStream = null;
+      _participantStream = null;
+      _messageStream = null;
+      return;
+    }
+
+    _tripStream = db.collection('trips').doc(tripId).snapshots();
+    _participantStream = db
+        .collection('tripParticipants')
+        .where('tripId', isEqualTo: tripId)
+        .snapshots();
+    _messageStream = db
+        .collection('tripMessages')
+        .where('tripId', isEqualTo: tripId)
+        .snapshots();
   }
 
   void _queueTripResolution({String? excludeTripId}) {
@@ -70,6 +120,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (!mounted || _effectiveTripId == tripId) return;
     setState(() {
       _effectiveTripId = tripId;
+      _configureTripStreams(tripId);
       if (tripId == null) {
         _queueTripResolution();
       } else {
@@ -609,100 +660,119 @@ class _ChatScreenState extends State<ChatScreen> {
         ? ''
         : '${dt.day} ${DateFormat('MMM').format(dt)}, ${TimeOfDay.fromDateTime(dt).format(context)}';
 
-    return Container(
-      padding: EdgeInsets.all(r(14)),
-      decoration: _surfaceDecoration(context, r(20)),
-      child: Row(
-        children: [
-          Container(
-            width: r(54),
-            height: r(54),
-            decoration: BoxDecoration(
-              color: AppTheme.brandOrange.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(r(16)),
-            ),
-            child: Icon(
-              Icons.directions_bus_rounded,
-              color: AppTheme.brandOrange,
-              size: r(30),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        final tripId = _effectiveTripId;
+        if (tripId == null || tripId.isEmpty) return;
+        FocusManager.instance.primaryFocus?.unfocus();
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TripDetailScreen(
+              tripId: tripId,
+              data: Map<String, dynamic>.from(tripData),
             ),
           ),
-          SizedBox(width: r(12)),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '$from → $to',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w900,
-                          fontSize: r(14.5),
+        );
+      },
+      child: Container(
+        padding: EdgeInsets.all(r(14)),
+        decoration: _surfaceDecoration(context, r(20)),
+        child: Row(
+          children: [
+            Container(
+              width: r(54),
+              height: r(54),
+              decoration: BoxDecoration(
+                color: AppTheme.brandOrange.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(r(16)),
+              ),
+              child: Icon(
+                Icons.directions_bus_rounded,
+                color: AppTheme.brandOrange,
+                size: r(30),
+              ),
+            ),
+            SizedBox(width: r(12)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '$from → $to',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            fontSize: r(14.5),
+                          ),
                         ),
                       ),
-                    ),
-                    SizedBox(width: r(8)),
-                    Text(
-                      'View Trip',
-                      style: TextStyle(
+                      SizedBox(width: r(8)),
+                      Text(
+                        'View Trip',
+                        style: TextStyle(
+                          color: AppTheme.brandOrange,
+                          fontWeight: FontWeight.w800,
+                          fontSize: r(11.5),
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
                         color: AppTheme.brandOrange,
-                        fontWeight: FontWeight.w800,
-                        fontSize: r(11.5),
+                        size: r(18),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: r(4)),
+                  Text(
+                    meeting.isEmpty ? 'Pickup point' : meeting,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(
+                        alpha: 0.56,
                       ),
                     ),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: AppTheme.brandOrange,
-                      size: r(18),
-                    ),
-                  ],
-                ),
-                SizedBox(height: r(4)),
-                Text(
-                  meeting.isEmpty ? 'Pickup point' : meeting,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.56),
                   ),
-                ),
-                SizedBox(height: r(10)),
-                Row(
-                  children: [
-                    if (dateText.isNotEmpty)
-                      Expanded(
+                  SizedBox(height: r(10)),
+                  Row(
+                    children: [
+                      if (dateText.isNotEmpty)
+                        Expanded(
+                          child: _compactMeta(
+                            context,
+                            Icons.calendar_today_rounded,
+                            dateText,
+                          ),
+                        ),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: r(9),
+                          vertical: r(5),
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(r(16)),
+                        ),
                         child: _compactMeta(
                           context,
-                          Icons.calendar_today_rounded,
-                          dateText,
+                          Icons.group_outlined,
+                          '$seatsLeft seats left',
+                          color: Colors.green,
                         ),
                       ),
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: r(9),
-                        vertical: r(5),
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(r(16)),
-                      ),
-                      child: _compactMeta(
-                        context,
-                        Icons.group_outlined,
-                        '$seatsLeft seats left',
-                        color: Colors.green,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -909,20 +979,36 @@ class _ChatScreenState extends State<ChatScreen> {
       children: mine ? [bubble, avatar] : [avatar, bubble],
     );
 
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 300),
-      builder: (context, value, child) {
-        return Opacity(
-          opacity: value,
-          child: Transform.translate(
-            offset: Offset(0, (1 - value) * 20),
-            child: child,
-          ),
+    return messageWidget;
+  }
+
+  void _scheduleScrollToLatest({
+    required String latestMessageId,
+    required int messageCount,
+  }) {
+    if (_lastRenderedMessageId == latestMessageId &&
+        _lastRenderedMessageCount == messageCount) {
+      return;
+    }
+
+    final animate = _didInitialMessageScroll;
+    _lastRenderedMessageId = latestMessageId;
+    _lastRenderedMessageCount = messageCount;
+    _didInitialMessageScroll = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final target = _scrollController.position.maxScrollExtent;
+      if (animate) {
+        _scrollController.animateTo(
+          target,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
         );
-      },
-      child: messageWidget,
-    );
+      } else {
+        _scrollController.jumpTo(target);
+      }
+    });
   }
 
   @override
@@ -966,25 +1052,31 @@ class _ChatScreenState extends State<ChatScreen> {
       );
     }
 
-    return StreamBuilder<DocumentSnapshot>(
-      stream: db.collection('trips').doc(_effectiveTripId).snapshots(),
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _tripStream,
       builder: (context, tripSnap) {
-        if (tripSnap.hasError) {
+        if (tripSnap.hasData) {
+          _lastTripData = tripSnap.data?.data();
+        }
+        final tripData = _lastTripData;
+
+        if (tripSnap.hasError && tripData == null) {
           debugPrint('Unable to load chat trip: ${tripSnap.error}');
           return _chatError('Unable to load the trip for this chat.', () {
             setState(() {
               _effectiveTripId = null;
+              _configureTripStreams(null);
               _queueTripResolution();
             });
           });
         }
-        if (tripSnap.connectionState == ConnectionState.waiting) {
+        if (tripData == null &&
+            tripSnap.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        final tripData = tripSnap.data?.data() as Map<String, dynamic>?;
         final isActiveTrip = tripData != null && _isTripActive(tripData);
 
         if (!isActiveTrip) {
@@ -1026,15 +1118,19 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
 
-        final isOwner = tripData!['ownerId'] == uid;
+        final isOwner = tripData['ownerId'] == uid;
 
-        return StreamBuilder<QuerySnapshot>(
-          stream: db
-              .collection('tripParticipants')
-              .where('tripId', isEqualTo: _effectiveTripId)
-              .snapshots(),
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _participantStream,
           builder: (context, participantSnap) {
-            if (participantSnap.hasError) {
+            if (participantSnap.hasData) {
+              _lastParticipantDocs = participantSnap.data!.docs;
+            }
+            final docs =
+                _lastParticipantDocs ??
+                const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+
+            if (participantSnap.hasError && _lastParticipantDocs == null) {
               debugPrint(
                 'Unable to load chat participants: ${participantSnap.error}',
               );
@@ -1042,15 +1138,15 @@ class _ChatScreenState extends State<ChatScreen> {
                 setState(() {});
               });
             }
-            if (participantSnap.connectionState == ConnectionState.waiting) {
+            if (_lastParticipantDocs == null &&
+                participantSnap.connectionState == ConnectionState.waiting) {
               return const Scaffold(
                 body: Center(child: CircularProgressIndicator()),
               );
             }
 
-            final docs = participantSnap.data?.docs ?? const [];
             final isParticipant = docs.any((d) {
-              final data = d.data() as Map<String, dynamic>;
+              final data = d.data();
               return data['userId'] == uid;
             });
 
@@ -1064,7 +1160,7 @@ class _ChatScreenState extends State<ChatScreen> {
             final profileProvider = context.read<UserProfileProvider>();
             final userIds = <String>{};
             for (final d in docs) {
-              final data = d.data() as Map<String, dynamic>;
+              final data = d.data();
               final pid = data['userId']?.toString();
               if (pid != null && pid.isNotEmpty) userIds.add(pid);
             }
@@ -1080,6 +1176,8 @@ class _ChatScreenState extends State<ChatScreen> {
             final canSend = _canChat;
 
             return Scaffold(
+              // MainNavigation already resizes its body for the keyboard.
+              resizeToAvoidBottomInset: false,
               body: _chatBackground(
                 child: SafeArea(
                   child: Column(
@@ -1124,20 +1222,29 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ),
                               ),
                             ),
-                            StreamBuilder<QuerySnapshot>(
-                              stream: db
-                                  .collection('tripMessages')
-                                  .where('tripId', isEqualTo: _effectiveTripId)
-                                  .snapshots(),
+                            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                              stream: _messageStream,
                               builder: (_, snap) {
-                                if (snap.connectionState ==
-                                    ConnectionState.waiting) {
+                                if (snap.hasData) {
+                                  _lastMessageDocs = snap.data!.docs;
+                                }
+                                final rawDocs =
+                                    _lastMessageDocs ??
+                                    const <
+                                      QueryDocumentSnapshot<
+                                        Map<String, dynamic>
+                                      >
+                                    >[];
+
+                                if (_lastMessageDocs == null &&
+                                    snap.connectionState ==
+                                        ConnectionState.waiting) {
                                   return const Center(
                                     child: CircularProgressIndicator(),
                                   );
                                 }
 
-                                if (snap.hasError) {
+                                if (snap.hasError && _lastMessageDocs == null) {
                                   debugPrint(
                                     'Unable to load trip messages: ${snap.error}',
                                   );
@@ -1156,7 +1263,6 @@ class _ChatScreenState extends State<ChatScreen> {
                                   );
                                 }
 
-                                final rawDocs = snap.data?.docs ?? const [];
                                 if (rawDocs.isEmpty) {
                                   return Center(
                                     child: Text(
@@ -1173,9 +1279,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 final profileProvider = context
                                     .read<UserProfileProvider>();
                                 for (final doc in messageDocs) {
-                                  final data =
-                                      doc.data() as Map<String, dynamic>? ??
-                                      const <String, dynamic>{};
+                                  final data = doc.data();
                                   final senderId =
                                       data['senderId']?.toString() ?? '';
                                   if (senderId.isNotEmpty) {
@@ -1185,12 +1289,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                   }
                                 }
                                 messageDocs.sort((a, b) {
-                                  final ad =
-                                      (a.data() as Map<String, dynamic>?) ??
-                                      const <String, dynamic>{};
-                                  final bd =
-                                      (b.data() as Map<String, dynamic>?) ??
-                                      const <String, dynamic>{};
+                                  final ad = a.data();
+                                  final bd = b.data();
                                   final at = _messageTimestamp(ad)?.toDate();
                                   final bt = _messageTimestamp(bd)?.toDate();
                                   if (at == null && bt == null) {
@@ -1203,22 +1303,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                   return a.id.compareTo(b.id);
                                 });
 
-                                // Scroll to last message after widget builds
-                                WidgetsBinding.instance.addPostFrameCallback((
-                                  _,
-                                ) {
-                                  if (_scrollController.hasClients) {
-                                    _scrollController.animateTo(
-                                      _scrollController
-                                          .position
-                                          .maxScrollExtent,
-                                      duration: const Duration(
-                                        milliseconds: 300,
-                                      ),
-                                      curve: Curves.easeOut,
-                                    );
-                                  }
-                                });
+                                _scheduleScrollToLatest(
+                                  latestMessageId: messageDocs.last.id,
+                                  messageCount: messageDocs.length,
+                                );
 
                                 return ListView.builder(
                                   controller: _scrollController,
@@ -1228,15 +1316,19 @@ class _ChatScreenState extends State<ChatScreen> {
                                   ),
                                   itemCount: messageDocs.length,
                                   itemBuilder: (_, i) {
-                                    final data =
-                                        messageDocs[i].data()
-                                            as Map<String, dynamic>;
+                                    final messageDoc = messageDocs[i];
+                                    final data = messageDoc.data();
                                     final mine = data['senderId'] == uid;
 
-                                    return _buildMessageItem(
-                                      data: data,
-                                      mine: mine,
-                                      secondary: secondary,
+                                    return KeyedSubtree(
+                                      key: ValueKey(
+                                        'trip-message-${messageDoc.id}',
+                                      ),
+                                      child: _buildMessageItem(
+                                        data: data,
+                                        mine: mine,
+                                        secondary: secondary,
+                                      ),
                                     );
                                   },
                                 );
